@@ -394,12 +394,18 @@ $OTCTL scan energy 200      # passive: busy channels
 $OTCTL scan                 # beacon request: channel and PAN of nearby networks
 $OTCTL dataset init new     # random key, PAN ID, extended PAN ID, mesh-local prefix
 $OTCTL dataset channel 19   # a channel no nearby network uses
+$OTCTL dataset channelmask 0x00080000   # 1 << 19: stay on that channel
 $OTCTL dataset networkname BattSwitchTest
 $OTCTL dataset              # check that the PAN ID differs from the scanned ones
 $OTCTL dataset commit active
 $OTCTL thread start
 $OTCTL srp server enable
 ```
+
+Limit the channel mask to your channel. Otherwise the leader regularly sends
+MLE Announce messages on every channel from 11 to 26, including the ones
+other networks use. Those messages are secured with your network key, so
+other networks drop them, but there's no need to transmit there at all.
 
 The Mac becomes the network's leader. Its `utun` interface gets the
 mesh-local prefix, so it can reach the device directly. No border routing is
