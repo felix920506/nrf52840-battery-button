@@ -172,9 +172,10 @@ CONFIG_APP_BATTERY_CR2032=y            # or APP_BATTERY_2XAAA_ALKALINE (default)
                                        # APP_BATTERY_2XAAA_CARBON_ZINC, APP_BATTERY_2XAAA_NIMH
 ```
 
-Other options, under *Battery switch application*: debounce time, long-press
-time, multi-press window and max count, latching switch poll interval,
-battery measurement interval, and warning/critical thresholds.
+Other options, under *Battery switch application*: debounce time (set
+separately for momentary and latching switches, both 20 ms by default),
+long-press time, multi-press window and max count, latching switch poll
+interval, battery measurement interval, and warning/critical thresholds.
 
 ## Using it
 

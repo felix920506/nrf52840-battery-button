@@ -57,6 +57,7 @@ BUILD_ASSERT(NUM_INPUTS >= 1 && NUM_INPUTS <= SWITCH_INPUT_MAX,
 
 struct input_state {
 	struct gpio_callback cb;
+	struct k_timer debounce_timer;
 	/* Debounced state, true = pressed/closed. */
 	bool active;
 	/* Waiting for the debounce timer. */
@@ -70,7 +71,9 @@ static switch_input_handler_t input_handler;
 
 static void debounce_expiry(struct k_timer *timer)
 {
-	app_loop_post(APP_EVT_INPUT_DEBOUNCE, 0, 0);
+	struct input_state *in = CONTAINER_OF(timer, struct input_state, debounce_timer);
+
+	app_loop_post(APP_EVT_INPUT_DEBOUNCE, in - inputs, 0);
 }
 
 static void poll_expiry(struct k_timer *timer)
@@ -78,7 +81,6 @@ static void poll_expiry(struct k_timer *timer)
 	app_loop_post(APP_EVT_INPUT_POLL, 0, 0);
 }
 
-static K_TIMER_DEFINE(debounce_timer, debounce_expiry, NULL);
 static K_TIMER_DEFINE(poll_timer, poll_expiry, NULL);
 static bool poll_running;
 
@@ -111,8 +113,11 @@ static bool read_pin(uint8_t idx)
 
 static void start_debounce(uint8_t idx)
 {
+	uint32_t ms = switch_input_is_latching(idx) ? CONFIG_APP_DEBOUNCE_LATCHING_MS
+						    : CONFIG_APP_DEBOUNCE_MS;
+
 	inputs[idx].debouncing = true;
-	k_timer_start(&debounce_timer, K_MSEC(CONFIG_APP_DEBOUNCE_MS), K_NO_WAIT);
+	k_timer_start(&inputs[idx].debounce_timer, K_MSEC(ms), K_NO_WAIT);
 }
 
 static void start_polling(void)
@@ -147,27 +152,25 @@ static void arm(uint8_t idx)
 					in->active ? GPIO_INT_LEVEL_INACTIVE : GPIO_INT_LEVEL_ACTIVE);
 }
 
-static void process_debounce(void)
+static void process_debounce(uint8_t idx)
 {
-	for (uint8_t i = 0; i < NUM_INPUTS; i++) {
-		struct input_state *in = &inputs[i];
+	struct input_state *in = &inputs[idx];
 
-		if (!in->debouncing) {
-			continue;
-		}
+	if (!in->debouncing) {
+		return;
+	}
 
-		in->debouncing = false;
+	in->debouncing = false;
 
-		bool active = read_pin(i);
-		bool changed = active != in->active;
+	bool active = read_pin(idx);
+	bool changed = active != in->active;
 
-		in->active = active;
-		arm(i);
+	in->active = active;
+	arm(idx);
 
-		if (changed) {
-			LOG_DBG("%s: %s", labels[i], active ? "closed" : "open");
-			input_handler(i, active);
-		}
+	if (changed) {
+		LOG_DBG("%s: %s", labels[idx], active ? "closed" : "open");
+		input_handler(idx, active);
 	}
 }
 
@@ -211,7 +214,9 @@ void switch_input_process(const struct app_evt *evt)
 		}
 		break;
 	case APP_EVT_INPUT_DEBOUNCE:
-		process_debounce();
+		if (evt->index < NUM_INPUTS) {
+			process_debounce(evt->index);
+		}
 		break;
 	case APP_EVT_INPUT_POLL:
 		process_poll();
@@ -241,6 +246,7 @@ int switch_input_init(switch_input_handler_t handler)
 
 		k_busy_wait(CONFIG_APP_LATCH_POLL_SETTLE_US);
 		inputs[i].active = read_pin(i);
+		k_timer_init(&inputs[i].debounce_timer, debounce_expiry, NULL);
 
 		gpio_init_callback(&inputs[i].cb, gpio_isr, BIT(specs[i].pin));
 		err = gpio_add_callback_dt(&specs[i], &inputs[i].cb);

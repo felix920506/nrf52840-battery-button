@@ -17,7 +17,7 @@ extern "C" {
 enum app_evt_type {
 	/* switch_input: a GPIO level interrupt fired for input `index`. */
 	APP_EVT_INPUT_IRQ,
-	/* switch_input: debounce time elapsed. */
+	/* switch_input: debounce time of input `index` elapsed. */
 	APP_EVT_INPUT_DEBOUNCE,
 	/* switch_input: time to sample closed latching switches. */
 	APP_EVT_INPUT_POLL,
