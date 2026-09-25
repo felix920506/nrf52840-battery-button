@@ -1,0 +1,25 @@
+description: |
+  External switches connected to GPIO inputs.
+
+  Each child node is one switch. The first child is switch 1 (Matter
+  endpoint 1), the second child is switch 2 and so on; up to 6 switches are
+  supported. Wire each switch between the GPIO pin and GND and use
+  (GPIO_PULL_UP | GPIO_ACTIVE_LOW) as flags.
+
+compatible: "battery-switch,inputs"
+
+child-binding:
+  description: A single external switch.
+  properties:
+    gpios:
+      type: phandle-array
+      required: true
+    label:
+      type: string
+      description: Human readable name, only used for logging.
+    latching:
+      type: boolean
+      description: |
+        The switch is latching (rocker/toggle): it stays in the position it
+        was put in. Without this property the switch is treated as
+        momentary (push button).

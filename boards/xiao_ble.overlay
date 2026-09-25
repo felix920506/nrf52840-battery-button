@@ -1,0 +1,140 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Seeed Studio XIAO nRF52840 (xiao_ble/nrf52840).
+ *
+ * Switch wiring: every switch goes between its pin and GND. The internal
+ * pull-up is used, no external parts are needed.
+ *
+ *   Switch 1 -> D0 (P0.02)      Switch 4 -> D3 (P0.29)
+ *   Switch 2 -> D1 (P0.03)      Switch 5 -> D4 (P0.04)
+ *   Switch 3 -> D2 (P0.28)      Switch 6 -> D5 (P0.05)
+ *
+ * Add `latching;` to a switch node for a rocker/toggle switch. Delete the
+ * nodes of switches that are not connected; their Matter endpoints are then
+ * disabled.
+ *
+ * Battery: connect + to 3V3 and - to GND (2x AAA or CR2032). The battery
+ * voltage is measured internally on the nRF52840 VDD rail.
+ */
+
+#include <zephyr/dt-bindings/adc/nrf-saadc.h>
+
+/ {
+	chosen {
+		zephyr,code-partition = &slot0_partition;
+	};
+
+	aliases {
+		status-led = &led2; /* blue */
+	};
+
+	switches {
+		compatible = "battery-switch,inputs";
+
+		switch_1 {
+			gpios = <&gpio0 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 1 (D0)";
+		};
+
+		switch_2 {
+			gpios = <&gpio0 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 2 (D1)";
+		};
+
+		switch_3 {
+			gpios = <&gpio0 28 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 3 (D2)";
+		};
+
+		switch_4 {
+			gpios = <&gpio0 29 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 4 (D3)";
+		};
+
+		switch_5 {
+			gpios = <&gpio0 4 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 5 (D4)";
+		};
+
+		switch_6 {
+			gpios = <&gpio0 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 6 (D5)";
+		};
+	};
+
+	zephyr,user {
+		io-channels = <&adc 0>;
+	};
+};
+
+/* Battery voltage = nRF52840 VDD (battery connected to 3V3). */
+&adc {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	channel@0 {
+		reg = <0>;
+		zephyr,gain = "ADC_GAIN_1_6";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 10)>;
+		zephyr,input-positive = <NRF_SAADC_VDD>;
+		zephyr,resolution = <12>;
+		zephyr,oversampling = <4>;
+	};
+};
+
+/*
+ * Replace the UF2 bootloader layout of the board with a layout that uses the
+ * whole internal flash (programmed over SWD):
+ *
+ *   0x00000 - 0xF6FFF  application          988 KiB
+ *   0xF7000 - 0xF7FFF  Matter factory data    4 KiB
+ *   0xF8000 - 0xFFFFF  settings storage      32 KiB
+ */
+&flash0 {
+	/delete-node/ partitions;
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		slot0_partition: partition@0 {
+			label = "image-0";
+			reg = <0x00000000 0x000f7000>;
+		};
+
+		factory_data_partition: partition@f7000 {
+			label = "factory-data";
+			reg = <0x000f7000 0x00001000>;
+		};
+
+		storage_partition: partition@f8000 {
+			label = "storage";
+			reg = <0x000f8000 0x00008000>;
+		};
+	};
+};
+
+/* Peripherals that are not used; disabling them avoids idle current. */
+&uart0 {
+	status = "disabled";
+};
+
+&i2c1 {
+	status = "disabled";
+};
+
+&spi2 {
+	status = "disabled";
+};
+
+&pwm0 {
+	status = "disabled";
+};
+
+&usbd {
+	status = "disabled";
+};
