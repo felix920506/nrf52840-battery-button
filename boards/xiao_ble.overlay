@@ -26,10 +26,6 @@
 #include <zephyr/dt-bindings/adc/nrf-saadc.h>
 
 / {
-	chosen {
-		zephyr,code-partition = &slot0_partition;
-	};
-
 	aliases {
 		status-led = &led2; /* blue */
 	};
@@ -91,34 +87,24 @@
 };
 
 /*
- * Replace the UF2 bootloader layout of the board with a layout that uses the
- * whole internal flash (programmed over SWD):
+ * Keep the board's Adafruit UF2 bootloader layout, and take the Matter factory
+ * data partition from the end of the application partition:
  *
- *   0x00000 - 0xF6FFF  application          988 KiB
- *   0xF7000 - 0xF7FFF  Matter factory data    4 KiB
- *   0xF8000 - 0xFFFFF  settings storage      32 KiB
+ *   0x00000 - 0x26FFF  MBR + SoftDevice area (used by the bootloader)
+ *   0x27000 - 0xEAFFF  application          784 KiB
+ *   0xEB000 - 0xEBFFF  Matter factory data    4 KiB
+ *   0xEC000 - 0xF3FFF  settings storage      32 KiB
+ *   0xF4000 - 0xFFFFF  UF2 bootloader        48 KiB
  */
+&code_partition {
+	reg = <0x00027000 0x000c4000>;
+};
+
 &flash0 {
-	/delete-node/ partitions;
-
 	partitions {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		slot0_partition: partition@0 {
-			label = "image-0";
-			reg = <0x00000000 0x000f7000>;
-		};
-
-		factory_data_partition: partition@f7000 {
+		factory_data_partition: partition@eb000 {
 			label = "factory-data";
-			reg = <0x000f7000 0x00001000>;
-		};
-
-		storage_partition: partition@f8000 {
-			label = "storage";
-			reg = <0x000f8000 0x00008000>;
+			reg = <0x000eb000 0x00001000>;
 		};
 	};
 };

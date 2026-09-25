@@ -108,17 +108,61 @@ west init -m <this repo url> --mr main battery-switch-ws
 cd battery-switch-ws && west update
 cd nrf52840-battery-button
 west build -b xiao_ble/nrf52840 --sysbuild
-west flash
+```
+
+If you installed the SDK with `nrfutil sdk-manager` instead (by default it goes
+in `/opt/nordic/ncs/v3.4.1`), build from inside that SDK directory, using its
+toolchain:
+
+```sh
+cd /opt/nordic/ncs/v3.4.1
+nrfutil sdk-manager toolchain launch --ncs-version v3.4.1 -- \
+  west build -b xiao_ble/nrf52840 --sysbuild -d <repo>/build <repo>
 ```
 
 For logs over SEGGER RTT, add `-- -DEXTRA_CONF_FILE=debug.conf` to the build
-command.
+command. RTT needs an SWD probe.
 
-**Flashing needs an SWD probe** (J-Link, or a Raspberry Pi debug probe with
-`--runner openocd`/`pyocd`), connected to the SWD pads on the bottom of the
-XIAO. The firmware uses the whole internal flash, so it **erases the UF2
-bootloader**. You can restore the bootloader later from Seeed's bootloader
-`.hex`.
+Resulting image sizes with nRF Connect SDK v3.4.1, out of 784 KB of flash
+available to the application:
+
+| Build | Flash | RAM |
+|---|---|---|
+| default (low power) | 569 KB | 159 KB |
+| `debug.conf` | 635 KB | 161 KB |
+
+### Flashing over USB (UF2 bootloader)
+
+The build keeps the XIAO's stock Adafruit UF2 bootloader. You don't need a
+debug probe:
+
+1. Connect the XIAO over USB. Remove the battery first.
+2. Double-press the reset button. A USB drive appears, named `XIAO-BOOT` or `XIAO-SENSE` depending on the bootloader version.
+3. Copy `build/battery_switch.uf2` to the drive. The XIAO reboots into the
+   firmware once the copy finishes.
+
+`battery_switch.uf2` contains both the application and the Matter factory data
+(pairing credentials). The `zephyr.uf2` that Zephyr normally builds isn't
+produced here, because it would lack the factory data.
+
+Flash layout (`boards/xiao_ble.overlay`):
+
+| Address | Contents |
+|---|---|
+| `0x00000–0x26FFF` | MBR + SoftDevice area of the bootloader (not touched) |
+| `0x27000–0xEAFFF` | application (784 KB) |
+| `0xEB000–0xEBFFF` | Matter factory data |
+| `0xEC000–0xF3FFF` | settings: Matter fabrics, Thread network, etc. |
+| `0xF4000–0xFFFFF` | UF2 bootloader (not touched) |
+
+Reflashing the UF2 keeps the settings, so the device stays commissioned. To
+start over, factory reset it (see below).
+
+### Flashing with an SWD probe
+
+`west flash` also works, with a J-Link or another probe on the SWD pads under
+the XIAO. It programs the application and the factory data and leaves the
+bootloader alone.
 
 Choose the battery type with `west build -t menuconfig` → *Battery switch
 application → Battery*, or in `prj.conf`:
@@ -182,6 +226,7 @@ src/core/status_led.*         LED patterns
 src/transport/transport.h     interface to the radio protocol
 src/transport/matter/         Matter over Thread implementation
 src/default_zap/              Matter data model (.zap) and generated code
+sysbuild.cmake                builds battery_switch.uf2 (app + factory data)
 ```
 
 ### Adding Zigbee or BLE later
