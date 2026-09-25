@@ -1,0 +1,267 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Power strategy:
+ *  - An open switch draws no current. Its pin has the pull-up enabled and a
+ *    level interrupt armed for the "closed" level. On nRF52 level interrupts
+ *    use the GPIO SENSE/PORT mechanism, which costs nothing while idle
+ *    (unlike GPIOTE IN channels).
+ *  - A pressed momentary switch keeps its pull-up (and draws current through
+ *    it) until released. Presses are short, so this is fine.
+ *  - A closed latching switch would draw current through the pull-up for as
+ *    long as it stays closed. Instead, its pin is disconnected and sampled
+ *    every CONFIG_APP_LATCH_POLL_INTERVAL_MS for a few microseconds.
+ */
+
+#include "switch_input.h"
+
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/util.h>
+
+LOG_MODULE_REGISTER(switch_input, CONFIG_LOG_DEFAULT_LEVEL);
+
+#if !DT_HAS_COMPAT_STATUS_OKAY(battery_switch_inputs)
+#error "No 'battery-switch,inputs' node in devicetree, see boards/xiao_ble.overlay"
+#endif
+
+#define SWITCHES_NODE DT_COMPAT_GET_ANY_STATUS_OKAY(battery_switch_inputs)
+
+#define SWITCH_SPEC(node)     GPIO_DT_SPEC_GET(node, gpios),
+#define SWITCH_LATCHING(node) DT_PROP(node, latching),
+#define SWITCH_LABEL(node)    DT_PROP_OR(node, label, DT_NODE_FULL_NAME(node)),
+
+static const struct gpio_dt_spec specs[] = {
+	DT_FOREACH_CHILD_STATUS_OKAY(SWITCHES_NODE, SWITCH_SPEC)
+};
+static const bool latching[] = {
+	DT_FOREACH_CHILD_STATUS_OKAY(SWITCHES_NODE, SWITCH_LATCHING)
+};
+static const char *const labels[] = {
+	DT_FOREACH_CHILD_STATUS_OKAY(SWITCHES_NODE, SWITCH_LABEL)
+};
+
+#define NUM_INPUTS ARRAY_SIZE(specs)
+
+BUILD_ASSERT(NUM_INPUTS >= 1 && NUM_INPUTS <= SWITCH_INPUT_MAX,
+	     "Between 1 and 6 switches must be defined in devicetree");
+
+struct input_state {
+	struct gpio_callback cb;
+	/* Debounced state, true = pressed/closed. */
+	bool active;
+	/* Waiting for the debounce timer. */
+	bool debouncing;
+	/* Closed latching switch: pin disconnected, sampled by the poll timer. */
+	bool polling;
+};
+
+static struct input_state inputs[NUM_INPUTS];
+static switch_input_handler_t input_handler;
+
+static void debounce_expiry(struct k_timer *timer)
+{
+	app_loop_post(APP_EVT_INPUT_DEBOUNCE, 0, 0);
+}
+
+static void poll_expiry(struct k_timer *timer)
+{
+	app_loop_post(APP_EVT_INPUT_POLL, 0, 0);
+}
+
+static K_TIMER_DEFINE(debounce_timer, debounce_expiry, NULL);
+static K_TIMER_DEFINE(poll_timer, poll_expiry, NULL);
+static bool poll_running;
+
+static void gpio_isr(const struct device *port, struct gpio_callback *cb, gpio_port_pins_t pins)
+{
+	struct input_state *in = CONTAINER_OF(cb, struct input_state, cb);
+	uint8_t idx = in - inputs;
+
+	/* Level interrupts keep firing until the level changes; the loop re-arms it. */
+	gpio_pin_interrupt_configure_dt(&specs[idx], GPIO_INT_DISABLE);
+	app_loop_post(APP_EVT_INPUT_IRQ, idx, 0);
+}
+
+static int connect_pin(uint8_t idx)
+{
+	/* Input with the flags from devicetree (pull-up, active low). */
+	return gpio_pin_configure_dt(&specs[idx], GPIO_INPUT);
+}
+
+static int disconnect_pin(uint8_t idx)
+{
+	/* No input buffer, no pull: the closed switch draws no current. */
+	return gpio_pin_configure(specs[idx].port, specs[idx].pin, GPIO_DISCONNECTED);
+}
+
+static bool read_pin(uint8_t idx)
+{
+	return gpio_pin_get_dt(&specs[idx]) > 0;
+}
+
+static void start_debounce(uint8_t idx)
+{
+	inputs[idx].debouncing = true;
+	k_timer_start(&debounce_timer, K_MSEC(CONFIG_APP_DEBOUNCE_MS), K_NO_WAIT);
+}
+
+static void start_polling(void)
+{
+	if (!poll_running) {
+		poll_running = true;
+		k_timer_start(&poll_timer, K_MSEC(CONFIG_APP_LATCH_POLL_INTERVAL_MS),
+			      K_MSEC(CONFIG_APP_LATCH_POLL_INTERVAL_MS));
+	}
+}
+
+/* Wait for the next change of a switch, in the cheapest way for its state. */
+static void arm(uint8_t idx)
+{
+	struct input_state *in = &inputs[idx];
+
+	if (latching[idx] && in->active) {
+		gpio_pin_interrupt_configure_dt(&specs[idx], GPIO_INT_DISABLE);
+		disconnect_pin(idx);
+		in->polling = true;
+		start_polling();
+		return;
+	}
+
+	in->polling = false;
+	connect_pin(idx);
+	/*
+	 * A level interrupt (unlike an edge interrupt) fires right away if the
+	 * pin already changed after it was sampled, so no change is missed.
+	 */
+	gpio_pin_interrupt_configure_dt(&specs[idx],
+					in->active ? GPIO_INT_LEVEL_INACTIVE : GPIO_INT_LEVEL_ACTIVE);
+}
+
+static void process_debounce(void)
+{
+	for (uint8_t i = 0; i < NUM_INPUTS; i++) {
+		struct input_state *in = &inputs[i];
+
+		if (!in->debouncing) {
+			continue;
+		}
+
+		in->debouncing = false;
+
+		bool active = read_pin(i);
+		bool changed = active != in->active;
+
+		in->active = active;
+		arm(i);
+
+		if (changed) {
+			LOG_DBG("%s: %s", labels[i], active ? "closed" : "open");
+			input_handler(i, active);
+		}
+	}
+}
+
+static void process_poll(void)
+{
+	bool any_polling = false;
+
+	for (uint8_t i = 0; i < NUM_INPUTS; i++) {
+		struct input_state *in = &inputs[i];
+
+		if (!in->polling) {
+			continue;
+		}
+
+		connect_pin(i);
+		k_busy_wait(CONFIG_APP_LATCH_POLL_SETTLE_US);
+
+		if (read_pin(i)) {
+			/* Still closed. */
+			disconnect_pin(i);
+			any_polling = true;
+		} else {
+			/* Opened (or bouncing): keep the pull-up and debounce it. */
+			in->polling = false;
+			start_debounce(i);
+		}
+	}
+
+	if (!any_polling) {
+		k_timer_stop(&poll_timer);
+		poll_running = false;
+	}
+}
+
+void switch_input_process(const struct app_evt *evt)
+{
+	switch (evt->type) {
+	case APP_EVT_INPUT_IRQ:
+		if (evt->index < NUM_INPUTS) {
+			start_debounce(evt->index);
+		}
+		break;
+	case APP_EVT_INPUT_DEBOUNCE:
+		process_debounce();
+		break;
+	case APP_EVT_INPUT_POLL:
+		process_poll();
+		break;
+	default:
+		break;
+	}
+}
+
+int switch_input_init(switch_input_handler_t handler)
+{
+	input_handler = handler;
+
+	for (uint8_t i = 0; i < NUM_INPUTS; i++) {
+		int err;
+
+		if (!gpio_is_ready_dt(&specs[i])) {
+			LOG_ERR("%s: GPIO not ready", labels[i]);
+			return -ENODEV;
+		}
+
+		err = connect_pin(i);
+		if (err) {
+			LOG_ERR("%s: configure failed (%d)", labels[i], err);
+			return err;
+		}
+
+		k_busy_wait(CONFIG_APP_LATCH_POLL_SETTLE_US);
+		inputs[i].active = read_pin(i);
+
+		gpio_init_callback(&inputs[i].cb, gpio_isr, BIT(specs[i].pin));
+		err = gpio_add_callback_dt(&specs[i], &inputs[i].cb);
+		if (err) {
+			LOG_ERR("%s: add callback failed (%d)", labels[i], err);
+			return err;
+		}
+
+		arm(i);
+
+		LOG_INF("%s: %s switch, initially %s", labels[i],
+			latching[i] ? "latching" : "momentary", inputs[i].active ? "closed" : "open");
+	}
+
+	return 0;
+}
+
+uint8_t switch_input_count(void)
+{
+	return NUM_INPUTS;
+}
+
+bool switch_input_is_latching(uint8_t index)
+{
+	return index < NUM_INPUTS && latching[index];
+}
+
+bool switch_input_is_active(uint8_t index)
+{
+	return index < NUM_INPUTS && inputs[index].active;
+}
