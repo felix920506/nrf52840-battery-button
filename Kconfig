@@ -21,7 +21,25 @@ config APP_TRANSPORT_MATTER
 	  as a Generic Switch endpoint (1..6), the battery as a Power Source
 	  cluster on endpoint 0.
 
+config APP_TRANSPORT_BLE
+	bool "Bluetooth LE (GATT)"
+	select BT
+	select BT_PERIPHERAL
+	select BT_BAS
+	select REBOOT
+	help
+	  Connectable peripheral that notifies switch events over a custom
+	  GATT service, battery level over the Battery Service. Mainly for
+	  testing without a Thread network; see src/transport/ble/ and
+	  tools/ble_test_client.py. Build with -DFILE_SUFFIX=ble.
+
 endchoice
+
+config APP_BLE_ADV_INTERVAL_MS
+	int "BLE advertising interval [ms]"
+	depends on APP_TRANSPORT_BLE
+	default 1000
+	range 20 10000
 
 menu "Switch inputs"
 
@@ -146,6 +164,15 @@ config APP_FACTORY_RESET_TOGGLE_WINDOW_MS
 	range 1000 30000
 
 endmenu
+
+config APP_USB_BOOTLOADER_RESET
+	bool "Reboot into the UF2 bootloader on a 1200 baud USB touch"
+	depends on USB_DEVICE_STACK_NEXT && UART_LINE_CTRL
+	help
+	  Development helper for builds with the USB console
+	  (usb-logging.conf). Opening and closing the USB serial port at
+	  1200 baud reboots into the UF2 bootloader, so the board can be
+	  reflashed without pressing reset.
 
 config APP_EVENT_QUEUE_SIZE
 	int "Application event queue size"

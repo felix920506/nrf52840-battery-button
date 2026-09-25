@@ -20,6 +20,9 @@ target_sources(app PRIVATE
   src/core/switch_input.c
 )
 
+target_sources_ifdef(CONFIG_APP_USB_BOOTLOADER_RESET app PRIVATE src/core/usb_bootloader.c)
+target_sources_ifdef(CONFIG_APP_TRANSPORT_BLE app PRIVATE src/transport/ble/ble_transport.c)
+
 if(CONFIG_APP_TRANSPORT_MATTER)
   include(${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/config/nrfconnect/app/enable-gnu-std.cmake)
   include(${ZEPHYR_NRF_MODULE_DIR}/samples/matter/common/cmake/data_model.cmake)

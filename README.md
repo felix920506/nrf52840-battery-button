@@ -29,6 +29,8 @@ queue events.
 
 * Wire each switch between its pin and **GND**. It uses the internal pull-up,
   so you don't need any external parts.
+* Works on the XIAO nRF52840, Sense and Plus. They share the chip, flash and
+  D0–D10 pinout, and all build with the `xiao_ble/nrf52840` target.
 * **Battery → 3V3 pin** (not BAT, not 5V). The nRF52840 runs directly from
   1.7 to 3.6 V, and the firmware measures the battery on its internal VDD rail,
   so you don't need a voltage divider. Supported batteries:
@@ -245,6 +247,41 @@ The core has no Matter dependencies. It emits `struct switch_event`s and
 
 The switch events map directly to the Zigbee *Multistate Input* cluster, or to
 a BLE GATT notification.
+
+### Bluetooth LE test build
+
+Without a Thread network, the switches can be tested over Bluetooth LE. The
+`ble` build variant replaces Matter with a small GATT server
+([`src/transport/ble/ble_transport.c`](src/transport/ble/ble_transport.c)).
+It sends the same switch events, using the same IDs as the Matter Switch
+cluster events, and battery level through the Battery Service:
+
+```sh
+west build -b xiao_ble/nrf52840 --sysbuild -d build-ble -- -DFILE_SUFFIX=ble \
+  -DEXTRA_CONF_FILE=usb-logging.conf -DEXTRA_DTC_OVERLAY_FILE=usb-logging.overlay
+pip install bleak
+python3 tools/ble_test_client.py
+```
+
+`usb-logging.conf` and `usb-logging.overlay` add a USB serial log. They also
+reboot the board into the UF2 bootloader when the serial port is opened and
+closed at 1200 baud, so you can reflash without pressing reset:
+
+```sh
+python3 -c "import serial; serial.Serial('/dev/cu.usbmodemXXXX', 1200).close()"
+```
+
+When coming from Arduino firmware, the same 1200-baud touch starts the
+bootloader in serial-only mode, without the USB drive. In that case, flash
+with `adafruit-nrfutil`:
+
+```sh
+adafruit-nrfutil dfu genpkg --dev-type 0x0052 --application build-ble/nrf52840-battery-button/zephyr/zephyr.hex pkg.zip
+adafruit-nrfutil dfu serial -pkg pkg.zip -p /dev/cu.usbmodemXXXX -b 115200 --singlebank
+```
+
+The Matter build doesn't work this way: it also needs the factory data, which
+only the UF2 file carries. Use the UF2 drive for that build.
 
 ### Changing the data model
 
