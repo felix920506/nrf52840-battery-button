@@ -136,11 +136,13 @@ battery measurement interval, and warning/critical thresholds.
 
 * **Commissioning:** after the first boot the device advertises over BLE for 15
   minutes, and the blue LED blinks briefly every 2 s. Pressing any switch
-  restarts advertising while the device isn't commissioned. The QR code and
-  manual pairing code come from the generated factory data: see
-  `build/nrf52840-battery-button/zephyr/` or the RTT log. The build uses the
-  Matter **test** vendor/product ID and test certificates, so controllers show
-  it as an uncertified test device.
+  restarts advertising while the device isn't commissioned. The QR code is
+  in `build/matter_factory_data/zephyr/factory_data.png`, and the setup
+  details are in `factory_data.json` next to it. They are also printed to the
+  RTT log in a `debug.conf` build. By default the passcode is `20202021` and
+  the discriminator is `3840`, so the manual pairing code is `34970112332`.
+  The build uses the Matter **test** vendor/product ID and test certificates,
+  so controllers show it as an uncertified test device.
 * **Identify:** the blue LED blinks.
 * **Factory reset:**
   * momentary switch 1: hold it for 10 s
