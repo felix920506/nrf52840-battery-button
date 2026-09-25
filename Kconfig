@@ -1,0 +1,178 @@
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+mainmenu "Battery powered switch"
+
+menu "Battery switch application"
+
+choice APP_TRANSPORT
+	prompt "Radio transport"
+	default APP_TRANSPORT_MATTER
+	help
+	  Selects the protocol used to report switch events and battery state.
+	  The switch/battery core in src/core does not depend on the transport;
+	  a new transport only has to implement src/transport/transport.h.
+
+config APP_TRANSPORT_MATTER
+	bool "Matter over Thread"
+	help
+	  Requires SB_CONFIG_MATTER=y in sysbuild.conf. Every switch is exposed
+	  as a Generic Switch endpoint (1..6), the battery as a Power Source
+	  cluster on endpoint 0.
+
+endchoice
+
+menu "Switch inputs"
+
+config APP_DEBOUNCE_MS
+	int "Debounce time [ms]"
+	default 20
+	range 1 200
+
+config APP_LONG_PRESS_MS
+	int "Momentary switch: hold time for a long press [ms]"
+	default 1000
+	range 200 10000
+
+config APP_MULTI_PRESS_WINDOW_MS
+	int "Momentary switch: max. gap between presses of a multi-press [ms]"
+	default 400
+	range 100 2000
+	help
+	  After the last release, MultiPressComplete is reported once no new
+	  press started within this window. Larger values make double presses
+	  easier, but delay the single press report by the same amount.
+
+config APP_MULTI_PRESS_MAX
+	int "Momentary switch: maximum number of presses in a multi-press"
+	default 2
+	range 2 10
+
+config APP_LATCH_POLL_INTERVAL_MS
+	int "Latching switch: poll interval while the switch is closed [ms]"
+	default 100
+	range 10 2000
+	help
+	  A closed switch would permanently draw current through the pull-up
+	  resistor (~230 uA at 3 V with the internal 13 kOhm pull-up). While a
+	  latching switch is closed, its pin is disconnected and only briefly
+	  sampled at this interval. This is the worst case latency for
+	  detecting the switch being opened.
+
+config APP_LATCH_POLL_SETTLE_US
+	int "Latching switch: pull-up settle time before sampling [us]"
+	default 10
+	range 1 1000
+	help
+	  Increase for long cables between the board and the switch.
+
+endmenu
+
+menu "Battery"
+
+choice APP_BATTERY_TYPE
+	prompt "Battery type"
+	default APP_BATTERY_2XAAA_ALKALINE
+	help
+	  Selects the voltage-to-charge curve used for the reported battery
+	  percentage. The battery is expected to be connected to the 3V3 pin
+	  (the nRF52840 supply), so no voltage divider is needed.
+
+config APP_BATTERY_CR2032
+	bool "CR2032 lithium coin cell (3 V)"
+
+config APP_BATTERY_2XAAA_ALKALINE
+	bool "2x AAA alkaline in series"
+
+config APP_BATTERY_2XAAA_CARBON_ZINC
+	bool "2x AAA carbon-zinc in series"
+
+config APP_BATTERY_2XAAA_NIMH
+	bool "2x AAA NiMH in series"
+
+endchoice
+
+config APP_BATTERY_MEASURE_INTERVAL_S
+	int "Battery measurement interval [s]"
+	default 3600
+	range 60 86400
+
+config APP_BATTERY_WARNING_PERCENT
+	int "Report charge level 'Warning' at or below [%]"
+	default 20
+	range 0 100
+
+config APP_BATTERY_CRITICAL_PERCENT
+	int "Report charge level 'Critical' (replace battery) at or below [%]"
+	default 5
+	range 0 100
+
+endmenu
+
+menu "User interface"
+
+config APP_STATUS_LED
+	bool "Status LED"
+	default y
+	help
+	  Uses the devicetree alias 'status-led' for pairing, identify and
+	  factory reset feedback. Blinks are short to save power.
+
+config APP_FACTORY_RESET_HOLD_MS
+	int "Momentary switch 1: hold time for factory reset [ms]"
+	default 10000
+	range 3000 60000
+
+config APP_FACTORY_RESET_TOGGLES
+	int "Latching switch 1: number of toggles for factory reset"
+	default 10
+	range 4 50
+
+config APP_FACTORY_RESET_TOGGLE_WINDOW_MS
+	int "Latching switch 1: time window for the factory reset toggles [ms]"
+	default 5000
+	range 1000 30000
+
+endmenu
+
+config APP_EVENT_QUEUE_SIZE
+	int "Application event queue size"
+	default 16
+
+endmenu
+
+# Matter over Thread defaults (same pattern as the nRF Connect SDK Matter
+# samples). They only take effect when CONFIG_CHIP is enabled.
+
+# Sleepy end device: the radio is off except for polling the parent.
+choice OPENTHREAD_NORDIC_LIBRARY_CONFIGURATION
+	default OPENTHREAD_NORDIC_LIBRARY_MTD
+endchoice
+
+choice OPENTHREAD_DEVICE_TYPE
+	default OPENTHREAD_MTD
+endchoice
+
+config CHIP_ENABLE_ICD_SUPPORT
+	default y
+
+config CHIP_ICD_LIT_SUPPORT
+	default y
+
+config CHIP_ICD_SIT_SLOW_POLL_LIMIT
+	default 5000
+
+config CHIP_ICD_REPORT_ON_ACTIVE_MODE
+	default y
+
+# 0 dBm is plenty for an end device next to its parent and keeps the TX peak
+# current low, which matters for coin cells.
+config OPENTHREAD_DEFAULT_TX_POWER
+	default 0
+
+source "$(ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR)/config/nrfconnect/chip-module/Kconfig.features"
+source "$(ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR)/config/nrfconnect/chip-module/Kconfig.defaults"
+source "$(ZEPHYR_NRF_MODULE_DIR)/samples/matter/common/src/Kconfig"
+
+source "Kconfig.zephyr"
