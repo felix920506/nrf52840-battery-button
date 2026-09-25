@@ -264,24 +264,30 @@ python3 tools/ble_test_client.py
 ```
 
 `usb-logging.conf` and `usb-logging.overlay` add a USB serial log. They also
-reboot the board into the UF2 bootloader when the serial port is opened and
-closed at 1200 baud, so you can reflash without pressing reset:
+reboot the board into the bootloader when the serial port is opened at
+1200 baud and closed with DTR low, so you can reflash without pressing reset.
+By default the bootloader then starts in serial-DFU mode
+(`CONFIG_APP_USB_BOOTLOADER_MODE_SERIAL`). That mode is more reliable than the
+USB drive on macOS, which can hang when copying large UF2 files:
 
 ```sh
-python3 -c "import serial; serial.Serial('/dev/cu.usbmodemXXXX', 1200).close()"
-```
-
-When coming from Arduino firmware, the same 1200-baud touch starts the
-bootloader in serial-only mode, without the USB drive. In that case, flash
-with `adafruit-nrfutil`:
-
-```sh
+python3 -c "import serial,time; s=serial.Serial('/dev/cu.usbmodemXXXX',1200); time.sleep(.3); s.dtr=False; time.sleep(.3); s.close()"
 adafruit-nrfutil dfu genpkg --dev-type 0x0052 --application build-ble/nrf52840-battery-button/zephyr/zephyr.hex pkg.zip
 adafruit-nrfutil dfu serial -pkg pkg.zip -p /dev/cu.usbmodemXXXX -b 115200 --singlebank
 ```
 
-The Matter build doesn't work this way: it also needs the factory data, which
-only the UF2 file carries. Use the UF2 drive for that build.
+`adafruit-nrfutil --touch 1200` doesn't work here, because it leaves DTR
+asserted. Select `CONFIG_APP_USB_BOOTLOADER_MODE_UF2` to get the USB drive
+after the touch instead. The same one-liner also works from Arduino firmware,
+which enters serial-only mode as well.
+
+Serial DFU writes one contiguous image, and on this bootloader that image must
+stay well below the size of the application partition. A Matter build with
+factory data (about 804 KB, from 0x27000 to the end of the factory data) is
+rejected; the application alone (about 650 KB) goes through. So flash Matter
+builds with factory data through the UF2 drive (use `cp -X`, see
+[Testing on a Mac](#testing-on-a-mac)), or build without factory data for
+development.
 
 ### Changing the data model
 

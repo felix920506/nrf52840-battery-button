@@ -166,13 +166,31 @@ config APP_FACTORY_RESET_TOGGLE_WINDOW_MS
 endmenu
 
 config APP_USB_BOOTLOADER_RESET
-	bool "Reboot into the UF2 bootloader on a 1200 baud USB touch"
+	bool "Reboot into the bootloader on a 1200 baud USB touch"
 	depends on USB_DEVICE_STACK_NEXT && UART_LINE_CTRL
 	help
 	  Development helper for builds with the USB console
 	  (usb-logging.conf). Opening and closing the USB serial port at
-	  1200 baud reboots into the UF2 bootloader, so the board can be
+	  1200 baud reboots into the Adafruit bootloader, so the board can be
 	  reflashed without pressing reset.
+
+choice APP_USB_BOOTLOADER_MODE
+	prompt "Bootloader mode entered on a 1200 baud touch"
+	depends on APP_USB_BOOTLOADER_RESET
+	default APP_USB_BOOTLOADER_MODE_SERIAL
+
+config APP_USB_BOOTLOADER_MODE_SERIAL
+	bool "Serial DFU only"
+	help
+	  For adafruit-nrfutil, which sends the touch itself:
+	    adafruit-nrfutil dfu serial --touch 1200 --singlebank ...
+	  More reliable than the USB drive on macOS, which can hang when
+	  copying large UF2 files.
+
+config APP_USB_BOOTLOADER_MODE_UF2
+	bool "UF2 USB drive"
+
+endchoice
 
 config APP_EVENT_QUEUE_SIZE
 	int "Application event queue size"
