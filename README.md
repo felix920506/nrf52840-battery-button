@@ -230,6 +230,8 @@ src/transport/transport.h     interface to the radio protocol
 src/transport/matter/         Matter over Thread implementation
 src/default_zap/              Matter data model (.zap) and generated code
 sysbuild.cmake                builds battery_switch.uf2 (app + factory data)
+dev/                          development-only config overlays (see Testing on a Mac)
+tools/                        BLE test client, SRP-to-mDNS bridge, Thread dataset provisioning
 ```
 
 ### Adding Zigbee or BLE later
@@ -299,6 +301,190 @@ west zap-generate -z src/default_zap/battery_switch.zap
 ```
 
 This rewrites `battery_switch.matter` and `zap-generated/`.
+
+## Testing on a Mac
+
+There are two ways to test on a Mac. The simplest is the
+[Bluetooth LE test build](#bluetooth-le-test-build). It needs nothing but the
+board and tests the switch inputs and press detection.
+
+Testing the real Matter-over-Thread firmware also needs a Thread radio. The
+steps below use a **Nordic nRF52840 Dongle** as the radio, OpenThread's
+`ot-daemon` as the Thread network, and `chip-tool` as the Matter controller.
+This was tested with nRF Connect SDK v3.4.1 on an Apple silicon Mac in
+September 2026.
+
+macOS gets in the way in three places:
+
+* **No BLE commissioning.** macOS won't let third-party apps use the Matter
+  BLE service (`0xFFF6`). Service discovery fails with `CBErrorDomain Code=8`
+  ("The specified UUID is not allowed for this operation"), and `chip-tool`
+  reports `GATT write characteristic operation failed`. The device therefore
+  gets its Thread dataset through a development shell, and is then
+  commissioned over the network. Phone-based controllers are not affected.
+* **No mDNS on the Thread interface.** `ot-daemon` uses a point-to-point
+  `utun` interface, which mDNSResponder ignores.
+  [`tools/srp_mdns_bridge.py`](tools/srp_mdns_bridge.py) republishes the
+  device's SRP registrations with `dns-sd -P`.
+* **`ot-daemon` dies from SIGPIPE** when an `ot-ctl` client disconnects early
+  (the log ends with `Failed to write CLI output: Socket is not connected`).
+  Start it with SIGPIPE ignored, as shown below.
+
+> **Be a good neighbour.** Other Thread networks are probably nearby. Always
+> scan first, then create your own network on a channel no other network
+> uses, with freshly generated credentials. Never run `thread start` on a
+> device until you've confirmed its dataset. With no dataset, OpenThread
+> starts its built-in default network (`OpenThread`, PAN 0x2929, channel 11).
+> `tools/provision_thread_dataset.py` makes that check for you.
+
+Below, `$NCS` is the SDK (for example `/opt/nordic/ncs/v3.4.1`), `$WORK` is a
+scratch directory outside this repository, and `$REPO` is this repository.
+Run `west` through the SDK toolchain, e.g.
+`nrfutil sdk-manager toolchain launch --ncs-version v3.4.1 -- west ...`.
+
+### 1. Dongle: OpenThread RCP firmware
+
+Press the dongle's reset button (the sideways one) to enter its bootloader.
+Then:
+
+```sh
+cd $NCS
+west build -b nrf52840dongle/nrf52840 --sysbuild -d $WORK/build-rcp nrf/samples/openthread/coprocessor
+nrfutil install nrf5sdk-tools
+nrfutil nrf5sdk-tools pkg generate --hw-version 52 --sd-req=0x00 \
+  --application $WORK/build-rcp/coprocessor/zephyr/zephyr.hex --application-version 1 $WORK/rcp.zip
+nrfutil nrf5sdk-tools dfu usb-serial -pkg $WORK/rcp.zip -p /dev/cu.usbmodemXXXX
+```
+
+Afterwards the dongle shows up as "Thread Co-Processor" (VID 0x1915, PID
+0x0000). Its serial port name changes, so check both boards' USB serial
+numbers so you don't mix up the dongle and the switch.
+
+### 2. `ot-daemon` and `ot-ctl`
+
+Build them from the SDK's OpenThread sources, so they match the RCP firmware:
+
+```sh
+cmake -GNinja -S $NCS/modules/lib/openthread -B $WORK/ot-build \
+  -DOT_PLATFORM=posix -DOT_DAEMON=ON -DOT_FTD=ON -DOT_MTD=OFF -DOT_RCP=OFF \
+  -DOT_SRP_SERVER=ON -DOT_ECDSA=ON -DOT_SERVICE=ON -DOT_NETDATA_PUBLISHER=ON \
+  -DOT_LOG_OUTPUT=PLATFORM_DEFINED -DOT_BUILD_EXECUTABLES=ON
+ninja -C $WORK/ot-build ot-daemon ot-ctl
+```
+
+Start `ot-daemon` as root. Run this in a terminal of its own, because
+`sudo` needs to ask for a password. The daemon keeps its settings in the
+current directory.
+
+```sh
+mkdir -p $WORK/ot-run
+sudo -b nohup sh -c "trap '' PIPE; cd $WORK/ot-run && exec $WORK/ot-build/src/posix/ot-daemon -v -d 4 'spinel+hdlc+uart:///dev/cu.usbmodem<dongle>' > ot-daemon.log 2>&1"
+sleep 3; sudo chmod 666 /tmp/openthread-utun*.sock   # lets ot-ctl run without sudo
+```
+
+It creates an interface `utunN`; use that name as `ot-ctl -I utunN` from
+here on. Stop it with `sudo pkill -f ot-build/src/posix/ot-daemon`.
+
+### 3. Your own Thread network
+
+```sh
+OTCTL="$WORK/ot-build/src/posix/ot-ctl -I utunN"
+$OTCTL ifconfig up
+$OTCTL scan energy 200      # passive: busy channels
+$OTCTL scan                 # beacon request: channel and PAN of nearby networks
+$OTCTL dataset init new     # random key, PAN ID, extended PAN ID, mesh-local prefix
+$OTCTL dataset channel 19   # a channel no nearby network uses
+$OTCTL dataset networkname BattSwitchTest
+$OTCTL dataset              # check that the PAN ID differs from the scanned ones
+$OTCTL dataset commit active
+$OTCTL thread start
+$OTCTL srp server enable
+```
+
+The Mac becomes the network's leader. Its `utun` interface gets the
+mesh-local prefix, so it can reach the device directly. No border routing is
+involved, and nothing is announced to your LAN except the mDNS records the
+bridge publishes.
+
+After a daemon restart, the dataset is still stored, but you need to repeat
+`ifconfig up`, `thread start` and `srp server enable`.
+
+### 4. `chip-tool` for macOS
+
+The prebuilt `chip-tool` on the Nordic release page is for Linux. Build it
+(about 6 GB and 20 minutes):
+
+```sh
+git clone --depth 1 --branch v3.4.1 https://github.com/nrfconnect/sdk-connectedhomeip.git $WORK/chip
+cd $WORK/chip
+python3 scripts/checkout_submodules.py --shallow --platform darwin
+source scripts/bootstrap.sh -p all,darwin
+gn gen out/chip-tool --root=examples/chip-tool && ninja -C out/chip-tool chip-tool
+```
+
+### 5. Development firmware for the switch
+
+This build has no factory data: it uses the Matter SDK test credentials,
+discriminator 3840 and passcode 20202021. It has the OpenThread shell and
+the USB log. Don't use it outside a test setup.
+
+```sh
+west build -b xiao_ble/nrf52840 --sysbuild -d $WORK/build-dev $REPO -- \
+  -DSB_CONFIG_MATTER_FACTORY_DATA_GENERATE=n \
+  "-DEXTRA_CONF_FILE=usb-logging.conf;dev/no-factory-data.conf;dev/ot-shell.conf" \
+  -DEXTRA_DTC_OVERLAY_FILE=usb-logging.overlay
+```
+
+To flash it, double-press reset, then copy it to the drive **with `cp -X`**:
+
+```sh
+cp -X $WORK/build-dev/battery_switch.uf2 /Volumes/XIAO-BOOT/
+```
+
+A plain `cp` (or Finder) first writes a `._` metadata file, which can hang
+the drive. The `Input/output error` at the end of a successful copy is normal:
+the board reboots once it has received the file. Serial DFU also works for
+this build (see the [Bluetooth LE test build](#bluetooth-le-test-build)).
+
+### 6. Put the switch on the network
+
+```sh
+pip install pyserial
+python3 $REPO/tools/provision_thread_dataset.py --ot-ctl "$OTCTL" \
+  --serial-number <XIAO USB serial> --expect-channel 19 --avoid-pan 0x<neighbour PAN>
+```
+
+The switch attaches as a sleepy child of the Mac and registers its
+commissionable service (`_matterc._udp`, subtype `_L3840`) with the SRP
+server. Keep the bridge running for the rest of the test:
+
+```sh
+python3 $REPO/tools/srp_mdns_bridge.py --ot-ctl "$OTCTL"
+```
+
+### 7. Commission and watch the events
+
+```sh
+CT=$WORK/chip/out/chip-tool/chip-tool
+S="--storage-directory $WORK/chip-storage"
+$CT pairing onnetwork-long 1 20202021 3840 $S \
+  --paa-trust-store-path $WORK/chip/credentials/development/paa-root-certs \
+  --bypass-attestation-verifier true        # development credentials
+$CT descriptor read parts-list 1 0 $S       # endpoints 1..6
+$CT powersource read bat-voltage 1 0 $S
+echo "switch subscribe-event-by-id 0xFFFFFFFF 1 60 1 0xFFFF" | $CT interactive start $S
+```
+
+Press the switches. Each press shows up as a Switch cluster event (0x01
+InitialPress, 0x02 LongPress, 0x03 ShortRelease, 0x04 LongRelease, 0x05
+MultiPressOngoing, 0x06 MultiPressComplete, 0x00 SwitchLatched) on
+endpoints 1–6.
+
+### Cleaning up
+
+* `$CT pairing unpair 1 $S` removes the switch from the test fabric.
+* Stop `ot-daemon`. The test network disappears with it.
+* Flash a normal firmware build to the switch.
 
 ## Known limitations
 
