@@ -56,7 +56,8 @@ static void factory_reset(void)
 
 /*
  * Momentary switch 1: hold for CONFIG_APP_FACTORY_RESET_HOLD_MS.
- * Latching switch 1: toggle CONFIG_APP_FACTORY_RESET_TOGGLES times within
+ * Latching switch 1 (either latching type): toggle it
+ * CONFIG_APP_FACTORY_RESET_TOGGLES times within
  * CONFIG_APP_FACTORY_RESET_TOGGLE_WINDOW_MS.
  */
 static void factory_reset_check(uint8_t index, bool active)
@@ -157,7 +158,7 @@ int main(void)
 
 	switches.count = switch_input_count();
 	for (uint8_t i = 0; i < switches.count; i++) {
-		switches.latching[i] = switch_input_is_latching(i);
+		switches.type[i] = switch_input_get_type(i);
 		switches.active[i] = switch_input_is_active(i);
 	}
 

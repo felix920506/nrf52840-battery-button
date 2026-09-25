@@ -9,8 +9,9 @@
  *
  * Endpoints without a switch in devicetree are disabled at runtime. The
  * Switch cluster feature map is set per endpoint at runtime:
- *   momentary: MS | MSR | MSL | MSM   (press/release/long press/multi press)
- *   latching:  LS                     (SwitchLatched)
+ *   momentary:         MS | MSR | MSL | MSM  (press/release/long press/multi press)
+ *   latching:          LS                    (SwitchLatched)
+ *   latching-as-press: MS | MSR | MSM        (every change is a short press)
  *
  * The device is a Thread sleepy end device and a Matter ICD; switch events
  * are sent to subscribed controllers as soon as they happen.
@@ -129,15 +130,26 @@ void SetupSwitchEndpoints()
 		uint32_t features;
 		uint8_t position = SWITCH_POSITION_OPEN;
 
-		if (sSwitches.latching[i]) {
+		switch (sSwitches.type[i]) {
+		case SWITCH_TYPE_LATCHING:
 			features = static_cast<uint32_t>(Feature::kLatchingSwitch);
 			position = sSwitches.active[i] ? SWITCH_POSITION_CLOSED : SWITCH_POSITION_OPEN;
-		} else {
+			break;
+		case SWITCH_TYPE_LATCHING_AS_PRESS:
+			/* No long press: the "press" is over as soon as it starts. */
+			features = static_cast<uint32_t>(Feature::kMomentarySwitch) |
+				   static_cast<uint32_t>(Feature::kMomentarySwitchRelease) |
+				   static_cast<uint32_t>(Feature::kMomentarySwitchMultiPress);
+			Attr::MultiPressMax::Set(ep, CONFIG_APP_MULTI_PRESS_MAX);
+			break;
+		case SWITCH_TYPE_MOMENTARY:
+		default:
 			features = static_cast<uint32_t>(Feature::kMomentarySwitch) |
 				   static_cast<uint32_t>(Feature::kMomentarySwitchRelease) |
 				   static_cast<uint32_t>(Feature::kMomentarySwitchLongPress) |
 				   static_cast<uint32_t>(Feature::kMomentarySwitchMultiPress);
 			Attr::MultiPressMax::Set(ep, CONFIG_APP_MULTI_PRESS_MAX);
+			break;
 		}
 
 		Attr::FeatureMap::Set(ep, features);

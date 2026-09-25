@@ -29,8 +29,8 @@ extern "C" {
 struct transport_switch_config {
 	/* Number of switches, 1..SWITCH_INPUT_MAX. */
 	uint8_t count;
-	bool latching[SWITCH_INPUT_MAX];
-	/* Position at boot, for latching switches. */
+	enum switch_type type[SWITCH_INPUT_MAX];
+	/* Position at boot, for SWITCH_TYPE_LATCHING. */
 	bool active[SWITCH_INPUT_MAX];
 };
 

@@ -10,9 +10,14 @@
  *   Switch 2 -> D1 (P0.03)      Switch 5 -> D4 (P0.04)
  *   Switch 3 -> D2 (P0.28)      Switch 6 -> D5 (P0.05)
  *
- * Add `latching;` to a switch node for a rocker/toggle switch. Delete the
- * nodes of switches that are not connected; their Matter endpoints are then
- * disabled.
+ * Set `switch-type` per switch (default "momentary"):
+ *   "momentary"          push button
+ *   "latching"           rocker/toggle whose position means on/off
+ *   "latching-as-press"  latching switch whose position means nothing (plain
+ *                        face rockers, latching switches that look like push
+ *                        buttons); every change is reported as a short press
+ * Delete the nodes of switches that are not connected; their Matter
+ * endpoints are then disabled.
  *
  * Battery: connect + to 3V3 and - to GND (2x AAA or CR2032). The battery
  * voltage is measured internally on the nRF52840 VDD rail.

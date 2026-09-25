@@ -17,9 +17,27 @@ child-binding:
     label:
       type: string
       description: Human readable name, only used for logging.
-    latching:
-      type: boolean
+    switch-type:
+      type: string
+      default: "momentary"
+      enum:
+        - "momentary"
+        - "latching"
+        - "latching-as-press"
       description: |
-        The switch is latching (rocker/toggle): it stays in the position it
-        was put in. Without this property the switch is treated as
-        momentary (push button).
+        momentary:
+          Push button, closed only while held. Reports press, release,
+          long press and multi press.
+
+        latching:
+          Rocker/toggle switch whose position can be seen on the switch and
+          means something (e.g. up = on). Reports the switch position.
+
+        latching-as-press:
+          Electrically latching, but the position carries no meaning, e.g.
+          plain-faced rockers (Panasonic Deco Lite, older Panasonic/National/
+          Jimbo module switches) or switches that look like push buttons but
+          latch (Schneider ZenCelo, Panasonic Cosmo Art, Rinsa, Glatima).
+          Every change of state is reported as a short press, so controllers
+          can use it like a push button. Changing it several times quickly
+          counts as a multi press. Long press is not possible.

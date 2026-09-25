@@ -18,6 +18,16 @@ extern "C" {
 
 #define SWITCH_INPUT_MAX 6
 
+/* Same order as the `switch-type` enum in dts/bindings/battery-switch,inputs.yaml. */
+enum switch_type {
+	/* Push button: closed only while held. */
+	SWITCH_TYPE_MOMENTARY,
+	/* Latching, the position is meaningful and reported as such. */
+	SWITCH_TYPE_LATCHING,
+	/* Latching, but every change is reported as a short press. */
+	SWITCH_TYPE_LATCHING_AS_PRESS,
+};
+
 /* Called from the application loop with the debounced state of a switch. */
 typedef void (*switch_input_handler_t)(uint8_t index, bool active);
 
@@ -26,6 +36,9 @@ int switch_input_init(switch_input_handler_t handler);
 /* Number of switches defined in devicetree. */
 uint8_t switch_input_count(void);
 
+enum switch_type switch_input_get_type(uint8_t index);
+
+/* True if the switch stays closed on its own (SWITCH_TYPE_LATCHING*). */
 bool switch_input_is_latching(uint8_t index);
 
 /* Debounced state: true while the switch is pressed/closed. */

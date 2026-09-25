@@ -56,9 +56,9 @@ config APP_LATCH_POLL_INTERVAL_MS
 	help
 	  A closed switch would permanently draw current through the pull-up
 	  resistor (~230 uA at 3 V with the internal 13 kOhm pull-up). While a
-	  latching switch is closed, its pin is disconnected and only briefly
-	  sampled at this interval. This is the worst case latency for
-	  detecting the switch being opened.
+	  latching switch (either latching type) is closed, its pin is
+	  disconnected and only briefly sampled at this interval. This is the
+	  worst case latency for detecting the switch being opened.
 
 config APP_LATCH_POLL_SETTLE_US
 	int "Latching switch: pull-up settle time before sampling [us]"

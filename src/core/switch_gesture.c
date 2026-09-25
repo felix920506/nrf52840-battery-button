@@ -145,16 +145,30 @@ void switch_gesture_input(uint8_t index, bool active)
 		return;
 	}
 
-	if (switch_input_is_latching(index)) {
+	switch (switch_input_get_type(index)) {
+	case SWITCH_TYPE_LATCHING:
 		emit(index, SWITCH_EVENT_LATCHED,
 		     active ? SWITCH_POSITION_CLOSED : SWITCH_POSITION_OPEN, 0);
-		return;
-	}
+		break;
 
-	if (active) {
+	case SWITCH_TYPE_LATCHING_AS_PRESS:
+		/*
+		 * The position means nothing, only the change does: report every
+		 * change as a complete short press. Changes within the multi press
+		 * window count as a multi press, like quick presses of a button.
+		 */
 		on_press(index, &gestures[index]);
-	} else {
 		on_release(index, &gestures[index]);
+		break;
+
+	case SWITCH_TYPE_MOMENTARY:
+	default:
+		if (active) {
+			on_press(index, &gestures[index]);
+		} else {
+			on_release(index, &gestures[index]);
+		}
+		break;
 	}
 }
 

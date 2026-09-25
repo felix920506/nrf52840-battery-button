@@ -13,6 +13,9 @@
  *
  * Latching switch (feature LS):
  *   SwitchLatched(position) on every change.
+ *
+ * Latching switch reported as press (features MS, MSR, MSM): every change is
+ * a short press, i.e. InitialPress, ShortRelease, then MultiPressComplete.
  */
 
 #pragma once

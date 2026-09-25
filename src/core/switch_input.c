@@ -8,7 +8,7 @@
  *    (unlike GPIOTE IN channels).
  *  - A pressed momentary switch keeps its pull-up (and draws current through
  *    it) until released. Presses are short, so this is fine.
- *  - A closed latching switch would draw current through the pull-up for as
+ *  - A closed latching switch (either latching type) would draw current through the pull-up for as
  *    long as it stays closed. Instead, its pin is disconnected and sampled
  *    every CONFIG_APP_LATCH_POLL_INTERVAL_MS for a few microseconds.
  */
@@ -30,15 +30,22 @@ LOG_MODULE_REGISTER(switch_input, CONFIG_LOG_DEFAULT_LEVEL);
 #define SWITCHES_NODE DT_COMPAT_GET_ANY_STATUS_OKAY(battery_switch_inputs)
 
 #define SWITCH_SPEC(node)     GPIO_DT_SPEC_GET(node, gpios),
-#define SWITCH_LATCHING(node) DT_PROP(node, latching),
+#define SWITCH_TYPE(node)     DT_ENUM_IDX(node, switch_type),
 #define SWITCH_LABEL(node)    DT_PROP_OR(node, label, DT_NODE_FULL_NAME(node)),
 
 static const struct gpio_dt_spec specs[] = {
 	DT_FOREACH_CHILD_STATUS_OKAY(SWITCHES_NODE, SWITCH_SPEC)
 };
-static const bool latching[] = {
-	DT_FOREACH_CHILD_STATUS_OKAY(SWITCHES_NODE, SWITCH_LATCHING)
+static const uint8_t types[] = {
+	DT_FOREACH_CHILD_STATUS_OKAY(SWITCHES_NODE, SWITCH_TYPE)
 };
+
+static const char *const type_names[] = {
+	[SWITCH_TYPE_MOMENTARY] = "momentary",
+	[SWITCH_TYPE_LATCHING] = "latching",
+	[SWITCH_TYPE_LATCHING_AS_PRESS] = "latching-as-press",
+};
+
 static const char *const labels[] = {
 	DT_FOREACH_CHILD_STATUS_OKAY(SWITCHES_NODE, SWITCH_LABEL)
 };
@@ -122,7 +129,7 @@ static void arm(uint8_t idx)
 {
 	struct input_state *in = &inputs[idx];
 
-	if (latching[idx] && in->active) {
+	if (switch_input_is_latching(idx) && in->active) {
 		gpio_pin_interrupt_configure_dt(&specs[idx], GPIO_INT_DISABLE);
 		disconnect_pin(idx);
 		in->polling = true;
@@ -245,7 +252,7 @@ int switch_input_init(switch_input_handler_t handler)
 		arm(i);
 
 		LOG_INF("%s: %s switch, initially %s", labels[i],
-			latching[i] ? "latching" : "momentary", inputs[i].active ? "closed" : "open");
+			type_names[types[i]], inputs[i].active ? "closed" : "open");
 	}
 
 	return 0;
@@ -256,9 +263,14 @@ uint8_t switch_input_count(void)
 	return NUM_INPUTS;
 }
 
+enum switch_type switch_input_get_type(uint8_t index)
+{
+	return index < NUM_INPUTS ? (enum switch_type)types[index] : SWITCH_TYPE_MOMENTARY;
+}
+
 bool switch_input_is_latching(uint8_t index)
 {
-	return index < NUM_INPUTS && latching[index];
+	return switch_input_get_type(index) != SWITCH_TYPE_MOMENTARY;
 }
 
 bool switch_input_is_active(uint8_t index)

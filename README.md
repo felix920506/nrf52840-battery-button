@@ -2,7 +2,8 @@
 
 Battery powered Matter-over-Thread switch for the **Seeed Studio XIAO nRF52840**.
 It supports up to **6 external switches**, and each one can be a momentary push
-button or a latching rocker/toggle switch. Every switch shows up in Matter
+button, a latching rocker/toggle switch, or a latching switch whose position
+means nothing and is reported as presses. Every switch shows up in Matter
 controllers as its own *Generic Switch* endpoint. The battery shows up as a
 *Power Source*.
 
@@ -46,9 +47,27 @@ Switches, pins and switch types are set in
 switch_3 {
 	gpios = <&gpio0 28 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 	label = "Switch 3 (D2)";
-	latching;            /* rocker/toggle switch */
+	switch-type = "latching";
 };
 ```
+
+| `switch-type` | Use for | Reported as |
+|---|---|---|
+| `"momentary"` (default) | push buttons | press, release, long press, multi press |
+| `"latching"` | rockers/toggles whose position means on/off | switch position |
+| `"latching-as-press"` | latching switches whose position means nothing | a short press on every change |
+
+Use `latching-as-press` for two kinds of switch:
+
+* Rockers whose position you can't read from the switch, because they have a
+  plain face. Examples: Panasonic Deco Lite, and older Panasonic/National/Jimbo
+  Japanese-style module switches.
+* Switches that look like push buttons but latch electrically. Examples:
+  Schneider ZenCelo, Panasonic Cosmo Art, Rinsa, Glatima.
+
+Every flip is sent as a short press, so a controller can use the switch as a
+toggle. Flipping it twice quickly counts as a double press. Long press isn't
+possible with these switches.
 
 If you remove a switch node, its Matter endpoint is disabled. Endpoints are
 numbered in node order: the first node is endpoint 1.
@@ -66,6 +85,7 @@ Controllers receive these **Switch cluster events**:
 |---|---|---|
 | momentary | MS, MSR, MSL, MSM (`0x1E`) | `InitialPress`, `ShortRelease`, `LongPress`, `LongRelease`, `MultiPressOngoing`, `MultiPressComplete` |
 | latching | LS (`0x01`) | `SwitchLatched` (position 1 = closed, 0 = open) |
+| latching-as-press | MS, MSR, MSM (`0x16`) | per change: `InitialPress`, `ShortRelease`; then `MultiPressComplete(n)` |
 
 Momentary sequences follow the Matter spec and the TC-SWTCH-2.4/2.5
 certification tests:
@@ -124,7 +144,7 @@ battery measurement interval, and warning/critical thresholds.
 * **Identify:** the blue LED blinks.
 * **Factory reset:**
   * momentary switch 1: hold it for 10 s
-  * latching switch 1: toggle it 10 times within 5 s
+  * latching switch 1 (either latching type): flip it 10 times within 5 s
 
 ## Power design
 
@@ -133,7 +153,7 @@ battery measurement interval, and warning/critical thresholds.
   is 0 dBm.
 * Switch pins wake the CPU through the GPIO SENSE mechanism (level
   interrupts), not GPIOTE IN channels. SENSE draws no current while idle.
-* A **closed latching switch** would draw about 230 µA through the pull-up
+* A **closed latching switch** (either latching type) would draw about 230 µA through the pull-up
   indefinitely. Instead, the pin is disconnected and sampled for about 10 µs
   every 100 ms (`CONFIG_APP_LATCH_POLL_INTERVAL_MS`), which costs roughly 1 µA.
   The trade-off is up to 100 ms of latency when the rocker is switched off.
@@ -192,7 +212,7 @@ This rewrites `battery_switch.matter` and `zap-generated/`.
 ## Known limitations
 
 * All six switch endpoints share one endpoint type in the `.zap` file. So a
-  latching endpoint still lists `MultiPressMax` in its AttributeList, even
+  `latching` endpoint still lists `MultiPressMax` in its AttributeList, even
   though its feature map is `LS`. Controllers ignore this, but it would need
   separate endpoint types to pass certification.
 * No OTA/DFU and no MCUboot. The goal was a barebones build; enabling
