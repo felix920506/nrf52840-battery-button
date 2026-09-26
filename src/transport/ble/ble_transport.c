@@ -8,18 +8,17 @@
  *     Switch Event            ...0002  (read, notify), 4 bytes:
  *                             [0] switch number, 1..6
  *                             [1] event, same IDs as the Matter Switch cluster:
- *                                 0 SwitchLatched, 1 InitialPress, 2 LongPress,
+ *                                 1 InitialPress, 2 LongPress,
  *                                 3 ShortRelease, 4 LongRelease,
  *                                 5 MultiPressOngoing, 6 MultiPressComplete
  *                             [2] position (new or previous, see switch_gesture.h)
  *                             [3] press count (multi press events)
  *     Switch Info             ...0003  (read): [0] number of switches,
- *                             [1..n] switch type (0 momentary, 1 latching,
- *                             2 latching-as-press)
+ *                             [1..n] switch type (0 momentary, 2 latching)
  *     Battery Voltage         ...0004  (read, notify): uint16 little endian, mV
  *     Switch Type             ...0005  (write): [0] switch number 1..6,
- *                             [1] new type (0 momentary, 1 latching,
- *                             2 latching-as-press). Stored on the device;
+ *                             [1] new type (0 momentary, 2 latching).
+ *                             Stored on the device;
  *                             Switch Info shows the result.
  *
  * There is no pairing or provisioning; any central can connect. Events that
@@ -44,7 +43,7 @@
 LOG_MODULE_REGISTER(ble_transport, CONFIG_LOG_DEFAULT_LEVEL);
 
 /* Matter Switch cluster event IDs, which switch_event_type follows. */
-BUILD_ASSERT(SWITCH_EVENT_LATCHED == 0 && SWITCH_EVENT_INITIAL_PRESS == 1 &&
+BUILD_ASSERT(SWITCH_EVENT_INITIAL_PRESS == 1 &&
 	     SWITCH_EVENT_LONG_PRESS == 2 && SWITCH_EVENT_SHORT_RELEASE == 3 &&
 	     SWITCH_EVENT_LONG_RELEASE == 4 && SWITCH_EVENT_MULTI_PRESS_ONGOING == 5 &&
 	     SWITCH_EVENT_MULTI_PRESS_COMPLETE == 6);
@@ -85,7 +84,7 @@ static ssize_t write_switch_type(struct bt_conn *conn, const struct bt_gatt_attr
 	if (offset != 0 || len != 2) {
 		return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
 	}
-	if (req[0] < 1 || req[0] > switch_info[0] || req[1] > SWITCH_TYPE_LATCHING_AS_PRESS) {
+	if (req[0] < 1 || req[0] > switch_info[0] || !switch_type_is_valid(req[1])) {
 		return BT_GATT_ERR(BT_ATT_ERR_VALUE_NOT_ALLOWED);
 	}
 

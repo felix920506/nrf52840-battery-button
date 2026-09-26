@@ -9,13 +9,12 @@
  *
  * Each switch endpoint also has a Mode Select cluster to change the switch
  * type from the smart home app (e.g. Home Assistant shows it as a dropdown):
- *   mode 0 momentary, 1 latching, 2 latching-as-press (enum switch_type).
+ *   mode 0 momentary, mode 2 latching (enum switch_type; 1 was removed).
  *
  * Endpoints without a switch in devicetree are disabled at runtime. The
  * Switch cluster feature map is set per endpoint at runtime:
- *   momentary:         MS | MSR | MSL | MSM  (press/release/long press/multi press)
- *   latching:          LS                    (SwitchLatched)
- *   latching-as-press: MS | MSR | MSM        (every change is a short press)
+ *   momentary: MS | MSR | MSL | MSM  (press/release/long press/multi press)
+ *   latching:  MS | MSR | MSM        (every change of position is a short press)
  *
  * The device is a Thread sleepy end device and a Matter ICD; switch events
  * are sent to subscribed controllers as soon as they happen.
@@ -121,17 +120,14 @@ SWITCH_IDENTIFY(4);
 SWITCH_IDENTIFY(5);
 SWITCH_IDENTIFY(6);
 
-/* ---- Setup ---- */
-
 /* ---- Switch type (Mode Select) ---- */
 
 using ModeOption = Clusters::ModeSelect::Structs::ModeOptionStruct::Type;
 
-/* Indexed by enum switch_type; the mode value is the enum value. */
+/* The mode value is the enum switch_type value (0 and 2; 1 was removed). */
 const ModeOption kSwitchModes[] = {
 	{ CharSpan::fromCharString("Momentary (push button)"), SWITCH_TYPE_MOMENTARY, {} },
-	{ CharSpan::fromCharString("Latching (rocker)"), SWITCH_TYPE_LATCHING, {} },
-	{ CharSpan::fromCharString("Latching, report changes as presses"), SWITCH_TYPE_LATCHING_AS_PRESS, {} },
+	{ CharSpan::fromCharString("Latching (rocker, toggle)"), SWITCH_TYPE_LATCHING_AS_PRESS, {} },
 };
 
 class SwitchModesManager : public Clusters::ModeSelect::SupportedModesManager {
@@ -147,11 +143,15 @@ public:
 	Protocols::InteractionModel::Status getModeOptionByMode(EndpointId endpoint, uint8_t mode,
 								const ModeOption **dataPtr) const override
 	{
-		if (!IsSwitchEndpoint(endpoint) || mode >= std::size(kSwitchModes)) {
-			return Protocols::InteractionModel::Status::InvalidCommand;
+		if (IsSwitchEndpoint(endpoint)) {
+			for (const ModeOption &option : kSwitchModes) {
+				if (option.mode == mode) {
+					*dataPtr = &option;
+					return Protocols::InteractionModel::Status::Success;
+				}
+			}
 		}
-		*dataPtr = &kSwitchModes[mode];
-		return Protocols::InteractionModel::Status::Success;
+		return Protocols::InteractionModel::Status::InvalidCommand;
 	}
 
 	static bool IsSwitchEndpoint(EndpointId endpoint)
@@ -169,33 +169,21 @@ void ApplySwitchType(uint8_t index, enum switch_type type, bool active)
 	using Feature = Clusters::Switch::Feature;
 
 	EndpointId ep = SwitchEndpoint(index);
-	uint32_t features;
-	uint8_t position = SWITCH_POSITION_OPEN;
 
-	switch (type) {
-	case SWITCH_TYPE_LATCHING:
-		features = static_cast<uint32_t>(Feature::kLatchingSwitch);
-		position = active ? SWITCH_POSITION_CLOSED : SWITCH_POSITION_OPEN;
-		break;
-	case SWITCH_TYPE_LATCHING_AS_PRESS:
-		/* No long press: the "press" is over as soon as it starts. */
-		features = static_cast<uint32_t>(Feature::kMomentarySwitch) |
-			   static_cast<uint32_t>(Feature::kMomentarySwitchRelease) |
-			   static_cast<uint32_t>(Feature::kMomentarySwitchMultiPress);
-		Attr::MultiPressMax::Set(ep, CONFIG_APP_MULTI_PRESS_MAX);
-		break;
-	case SWITCH_TYPE_MOMENTARY:
-	default:
-		features = static_cast<uint32_t>(Feature::kMomentarySwitch) |
-			   static_cast<uint32_t>(Feature::kMomentarySwitchRelease) |
-			   static_cast<uint32_t>(Feature::kMomentarySwitchLongPress) |
-			   static_cast<uint32_t>(Feature::kMomentarySwitchMultiPress);
-		Attr::MultiPressMax::Set(ep, CONFIG_APP_MULTI_PRESS_MAX);
-		break;
+	(void)active; /* No position to report: both types report presses. */
+
+	/* Both types support multi press; a latching switch has no long press. */
+	uint32_t features = static_cast<uint32_t>(Feature::kMomentarySwitch) |
+			    static_cast<uint32_t>(Feature::kMomentarySwitchRelease) |
+			    static_cast<uint32_t>(Feature::kMomentarySwitchMultiPress);
+
+	if (type == SWITCH_TYPE_MOMENTARY) {
+		features |= static_cast<uint32_t>(Feature::kMomentarySwitchLongPress);
 	}
 
+	Attr::MultiPressMax::Set(ep, CONFIG_APP_MULTI_PRESS_MAX);
 	Attr::FeatureMap::Set(ep, features);
-	Attr::CurrentPosition::Set(ep, position);
+	Attr::CurrentPosition::Set(ep, SWITCH_POSITION_OPEN);
 	Clusters::ModeSelect::Attributes::CurrentMode::Set(ep, static_cast<uint8_t>(type));
 }
 
@@ -319,10 +307,6 @@ void transport_switch_event(uint8_t index, const struct switch_event *evt)
 	StackLock lock;
 
 	switch (evt->type) {
-	case SWITCH_EVENT_LATCHED:
-		Attr::CurrentPosition::Set(ep, evt->position);
-		server.OnSwitchLatch(ep, evt->position);
-		break;
 	case SWITCH_EVENT_INITIAL_PRESS:
 		Attr::CurrentPosition::Set(ep, evt->position);
 		server.OnInitialPress(ep, evt->position);

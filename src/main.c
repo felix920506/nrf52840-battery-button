@@ -57,7 +57,7 @@ static void on_input(uint8_t index, bool active)
 /* Change requested through the transport (e.g. the smart home app). */
 static void change_switch_type(uint8_t index, uint16_t type)
 {
-	if (index >= switch_input_count() || type > SWITCH_TYPE_LATCHING_AS_PRESS ||
+	if (index >= switch_input_count() || !switch_type_is_valid(type) ||
 	    switch_input_get_type(index) == type) {
 		return;
 	}

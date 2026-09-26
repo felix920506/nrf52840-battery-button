@@ -27,7 +27,6 @@ BATTERY_LEVEL = "00002a19-0000-1000-8000-00805f9b34fb"
 
 # Same IDs as the Matter Switch cluster events.
 EVENTS = {
-    0: "SwitchLatched",
     1: "InitialPress",
     2: "LongPress",
     3: "ShortRelease",
@@ -35,15 +34,13 @@ EVENTS = {
     5: "MultiPressOngoing",
     6: "MultiPressComplete",
 }
-TYPES = {0: "momentary", 1: "latching", 2: "latching-as-press"}
+TYPES = {0: "momentary", 2: "latching"}
 TYPE_IDS = {name: value for value, name in TYPES.items()}
 
 
 def format_event(data: bytes) -> str:
     number, event, position, count = struct.unpack("<BBBB", data[:4])
     text = f"switch {number}: {EVENTS.get(event, f'event {event}')}"
-    if event == 0:
-        text += f" position={position}"
     if event in (5, 6):
         text += f" count={count}"
     return text
@@ -101,7 +98,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument("--set-type", nargs=2, metavar=("SWITCH", "TYPE"),
                         help="change a switch's type first, e.g. --set-type 2 latching "
-                             "(momentary, latching, latching-as-press)")
+                             "(momentary, latching)")
     args = parser.parse_args()
     set_type = None
     if args.set_type:

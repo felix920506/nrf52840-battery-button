@@ -11,11 +11,8 @@
  * A long press (only possible as the first press of a sequence):
  *   InitialPress, LongPress, LongRelease
  *
- * Latching switch (feature LS):
- *   SwitchLatched(position) on every change.
- *
- * Latching switch reported as press (features MS, MSR, MSM): every change is
- * a short press, i.e. InitialPress, ShortRelease, then MultiPressComplete.
+ * Latching switch (features MS, MSR, MSM): every change is a short press,
+ * i.e. InitialPress, ShortRelease, then MultiPressComplete.
  */
 
 #pragma once
@@ -30,8 +27,8 @@ extern "C" {
 #endif
 
 enum switch_event_type {
-	SWITCH_EVENT_LATCHED,
-	SWITCH_EVENT_INITIAL_PRESS,
+	/* Same values as the Matter Switch cluster event IDs (0 is SwitchLatched, unused). */
+	SWITCH_EVENT_INITIAL_PRESS = 1,
 	SWITCH_EVENT_LONG_PRESS,
 	SWITCH_EVENT_SHORT_RELEASE,
 	SWITCH_EVENT_LONG_RELEASE,

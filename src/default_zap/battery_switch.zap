@@ -4630,13 +4630,6 @@
           ],
           "events": [
             {
-              "name": "SwitchLatched",
-              "code": 0,
-              "mfgCode": null,
-              "side": "server",
-              "included": 1
-            },
-            {
               "name": "InitialPress",
               "code": 1,
               "mfgCode": null,

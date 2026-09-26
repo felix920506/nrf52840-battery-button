@@ -457,7 +457,7 @@
 
 
 // clang-format off
-#define GENERATED_EVENT_COUNT 46
+#define GENERATED_EVENT_COUNT 40
 #define GENERATED_EVENTS { \
   /* Endpoint: 0, Cluster: Basic Information (server) */ \
   /* EventList (index=0) */ \
@@ -469,7 +469,6 @@
   0x00000001, /* BatFaultChange */ \
   /* Endpoint: 1, Cluster: Switch (server) */ \
   /* EventList (index=4) */ \
-  0x00000000, /* SwitchLatched */ \
   0x00000001, /* InitialPress */ \
   0x00000002, /* LongPress */ \
   0x00000003, /* ShortRelease */ \
@@ -477,8 +476,7 @@
   0x00000005, /* MultiPressOngoing */ \
   0x00000006, /* MultiPressComplete */ \
   /* Endpoint: 2, Cluster: Switch (server) */ \
-  /* EventList (index=11) */ \
-  0x00000000, /* SwitchLatched */ \
+  /* EventList (index=10) */ \
   0x00000001, /* InitialPress */ \
   0x00000002, /* LongPress */ \
   0x00000003, /* ShortRelease */ \
@@ -486,8 +484,7 @@
   0x00000005, /* MultiPressOngoing */ \
   0x00000006, /* MultiPressComplete */ \
   /* Endpoint: 3, Cluster: Switch (server) */ \
-  /* EventList (index=18) */ \
-  0x00000000, /* SwitchLatched */ \
+  /* EventList (index=16) */ \
   0x00000001, /* InitialPress */ \
   0x00000002, /* LongPress */ \
   0x00000003, /* ShortRelease */ \
@@ -495,8 +492,7 @@
   0x00000005, /* MultiPressOngoing */ \
   0x00000006, /* MultiPressComplete */ \
   /* Endpoint: 4, Cluster: Switch (server) */ \
-  /* EventList (index=25) */ \
-  0x00000000, /* SwitchLatched */ \
+  /* EventList (index=22) */ \
   0x00000001, /* InitialPress */ \
   0x00000002, /* LongPress */ \
   0x00000003, /* ShortRelease */ \
@@ -504,8 +500,7 @@
   0x00000005, /* MultiPressOngoing */ \
   0x00000006, /* MultiPressComplete */ \
   /* Endpoint: 5, Cluster: Switch (server) */ \
-  /* EventList (index=32) */ \
-  0x00000000, /* SwitchLatched */ \
+  /* EventList (index=28) */ \
   0x00000001, /* InitialPress */ \
   0x00000002, /* LongPress */ \
   0x00000003, /* ShortRelease */ \
@@ -513,8 +508,7 @@
   0x00000005, /* MultiPressOngoing */ \
   0x00000006, /* MultiPressComplete */ \
   /* Endpoint: 6, Cluster: Switch (server) */ \
-  /* EventList (index=39) */ \
-  0x00000000, /* SwitchLatched */ \
+  /* EventList (index=34) */ \
   0x00000001, /* InitialPress */ \
   0x00000002, /* LongPress */ \
   0x00000003, /* ShortRelease */ \
@@ -858,7 +852,7 @@ const EmberAfGenericClusterFunction chipFuncArrayModeSelectServer[] = {\
       .acceptedCommandList = nullptr, \
       .generatedCommandList = nullptr, \
       .eventList = ZAP_GENERATED_EVENTS_INDEX( 4 ), \
-      .eventCount = 7, \
+      .eventCount = 6, \
     },\
   { \
       /* Endpoint: 1, Cluster: Mode Select (server) */ \
@@ -909,8 +903,8 @@ const EmberAfGenericClusterFunction chipFuncArrayModeSelectServer[] = {\
       .functions = NULL, \
       .acceptedCommandList = nullptr, \
       .generatedCommandList = nullptr, \
-      .eventList = ZAP_GENERATED_EVENTS_INDEX( 11 ), \
-      .eventCount = 7, \
+      .eventList = ZAP_GENERATED_EVENTS_INDEX( 10 ), \
+      .eventCount = 6, \
     },\
   { \
       /* Endpoint: 2, Cluster: Mode Select (server) */ \
@@ -961,8 +955,8 @@ const EmberAfGenericClusterFunction chipFuncArrayModeSelectServer[] = {\
       .functions = NULL, \
       .acceptedCommandList = nullptr, \
       .generatedCommandList = nullptr, \
-      .eventList = ZAP_GENERATED_EVENTS_INDEX( 18 ), \
-      .eventCount = 7, \
+      .eventList = ZAP_GENERATED_EVENTS_INDEX( 16 ), \
+      .eventCount = 6, \
     },\
   { \
       /* Endpoint: 3, Cluster: Mode Select (server) */ \
@@ -1013,8 +1007,8 @@ const EmberAfGenericClusterFunction chipFuncArrayModeSelectServer[] = {\
       .functions = NULL, \
       .acceptedCommandList = nullptr, \
       .generatedCommandList = nullptr, \
-      .eventList = ZAP_GENERATED_EVENTS_INDEX( 25 ), \
-      .eventCount = 7, \
+      .eventList = ZAP_GENERATED_EVENTS_INDEX( 22 ), \
+      .eventCount = 6, \
     },\
   { \
       /* Endpoint: 4, Cluster: Mode Select (server) */ \
@@ -1065,8 +1059,8 @@ const EmberAfGenericClusterFunction chipFuncArrayModeSelectServer[] = {\
       .functions = NULL, \
       .acceptedCommandList = nullptr, \
       .generatedCommandList = nullptr, \
-      .eventList = ZAP_GENERATED_EVENTS_INDEX( 32 ), \
-      .eventCount = 7, \
+      .eventList = ZAP_GENERATED_EVENTS_INDEX( 28 ), \
+      .eventCount = 6, \
     },\
   { \
       /* Endpoint: 5, Cluster: Mode Select (server) */ \
@@ -1117,8 +1111,8 @@ const EmberAfGenericClusterFunction chipFuncArrayModeSelectServer[] = {\
       .functions = NULL, \
       .acceptedCommandList = nullptr, \
       .generatedCommandList = nullptr, \
-      .eventList = ZAP_GENERATED_EVENTS_INDEX( 39 ), \
-      .eventCount = 7, \
+      .eventList = ZAP_GENERATED_EVENTS_INDEX( 34 ), \
+      .eventCount = 6, \
     },\
   { \
       /* Endpoint: 6, Cluster: Mode Select (server) */ \

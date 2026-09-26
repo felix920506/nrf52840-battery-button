@@ -10,12 +10,11 @@
  *   Switch 2 -> D1 (P0.03)      Switch 5 -> D4 (P0.04)
  *   Switch 3 -> D2 (P0.28)      Switch 6 -> D5 (P0.05)
  *
- * Set `switch-type` per switch (default "momentary"):
- *   "momentary"          push button
- *   "latching"           rocker/toggle whose position means on/off
- *   "latching-as-press"  latching switch whose position means nothing (plain
- *                        face rockers, latching switches that look like push
- *                        buttons); every change is reported as a short press
+ * Set `switch-type` per switch (default "momentary"); it can also be changed
+ * later from the smart home app:
+ *   "momentary"  push button
+ *   "latching"   rocker/toggle; every change of position is reported as a
+ *                short press
  * Delete the nodes of switches that are not connected; their Matter
  * endpoints are then disabled.
  *

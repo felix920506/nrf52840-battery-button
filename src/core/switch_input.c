@@ -8,7 +8,7 @@
  *    (unlike GPIOTE IN channels).
  *  - A pressed momentary switch keeps its pull-up (and draws current through
  *    it) until released. Presses are short, so this is fine.
- *  - A closed latching switch (either latching type) would draw current through the pull-up for as
+ *  - A closed latching switch would draw current through the pull-up for as
  *    long as it stays closed. Instead, its pin is disconnected and sampled
  *    every CONFIG_APP_LATCH_POLL_INTERVAL_MS for a few microseconds.
  */
@@ -30,7 +30,9 @@ LOG_MODULE_REGISTER(switch_input, CONFIG_LOG_DEFAULT_LEVEL);
 #define SWITCHES_NODE DT_COMPAT_GET_ANY_STATUS_OKAY(battery_switch_inputs)
 
 #define SWITCH_SPEC(node)     GPIO_DT_SPEC_GET(node, gpios),
-#define SWITCH_TYPE(node)     DT_ENUM_IDX(node, switch_type),
+/* Devicetree enum: 0 "momentary", 1 "latching". */
+#define SWITCH_TYPE(node)                                                                          \
+	(DT_ENUM_IDX(node, switch_type) ? SWITCH_TYPE_LATCHING_AS_PRESS : SWITCH_TYPE_MOMENTARY),
 #define SWITCH_LABEL(node)    DT_PROP_OR(node, label, DT_NODE_FULL_NAME(node)),
 
 static const struct gpio_dt_spec specs[] = {
@@ -43,8 +45,7 @@ static uint8_t types[] = {
 
 static const char *const type_names[] = {
 	[SWITCH_TYPE_MOMENTARY] = "momentary",
-	[SWITCH_TYPE_LATCHING] = "latching",
-	[SWITCH_TYPE_LATCHING_AS_PRESS] = "latching-as-press",
+	[SWITCH_TYPE_LATCHING_AS_PRESS] = "latching",
 };
 
 static const char *const labels[] = {

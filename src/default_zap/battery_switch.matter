@@ -2050,7 +2050,6 @@ endpoint 1 {
   }
 
   server cluster Switch {
-    emits event SwitchLatched;
     emits event InitialPress;
     emits event LongPress;
     emits event ShortRelease;
@@ -2112,7 +2111,6 @@ endpoint 2 {
   }
 
   server cluster Switch {
-    emits event SwitchLatched;
     emits event InitialPress;
     emits event LongPress;
     emits event ShortRelease;
@@ -2174,7 +2172,6 @@ endpoint 3 {
   }
 
   server cluster Switch {
-    emits event SwitchLatched;
     emits event InitialPress;
     emits event LongPress;
     emits event ShortRelease;
@@ -2236,7 +2233,6 @@ endpoint 4 {
   }
 
   server cluster Switch {
-    emits event SwitchLatched;
     emits event InitialPress;
     emits event LongPress;
     emits event ShortRelease;
@@ -2298,7 +2294,6 @@ endpoint 5 {
   }
 
   server cluster Switch {
-    emits event SwitchLatched;
     emits event InitialPress;
     emits event LongPress;
     emits event ShortRelease;
@@ -2360,7 +2355,6 @@ endpoint 6 {
   }
 
   server cluster Switch {
-    emits event SwitchLatched;
     emits event InitialPress;
     emits event LongPress;
     emits event ShortRelease;

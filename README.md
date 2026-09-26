@@ -2,8 +2,7 @@
 
 Battery powered Matter-over-Thread switch for the **Seeed Studio XIAO nRF52840**.
 It supports up to **6 external switches**, and each one can be a momentary push
-button, a latching rocker/toggle switch, or a latching switch whose position
-means nothing and is reported as presses. Every switch shows up in Matter
+button or a latching rocker/toggle switch. Every switch shows up in Matter
 controllers as its own *Generic Switch* endpoint. The battery shows up as a
 *Power Source*.
 
@@ -61,20 +60,21 @@ switch_3 {
 | `switch-type` | Use for | Reported as |
 |---|---|---|
 | `"momentary"` (default) | push buttons | press, release, long press, multi press |
-| `"latching"` | rockers/toggles whose position means on/off | switch position |
-| `"latching-as-press"` | latching switches whose position means nothing | a short press on every change |
+| `"latching"` | rockers and toggles | a short press on every change of position |
 
-Use `latching-as-press` for two kinds of switch:
+A latching switch reports every flip as a short press, not as a position, so
+a controller can use it as a toggle. Flipping it twice quickly counts as a
+double press; long press isn't possible. This also suits switches whose
+position you can't read from the switch:
 
-* Rockers whose position you can't read from the switch, because they have a
-  plain face. Examples: Panasonic Deco Lite, and older Panasonic/National/Jimbo
-  Japanese-style module switches.
-* Switches that look like push buttons but latch electrically. Examples:
-  Schneider ZenCelo, Panasonic Cosmo Art, Rinsa, Glatima.
+* plain-faced rockers, e.g. Panasonic Deco Lite, and older
+  Panasonic/National/Jimbo Japanese-style module switches;
+* switches that look like push buttons but latch electrically, e.g. Schneider
+  ZenCelo, Panasonic Cosmo Art, Rinsa, Glatima.
 
-Every flip is sent as a short press, so a controller can use the switch as a
-toggle. Flipping it twice quickly counts as a double press. Long press isn't
-possible with these switches.
+There is no type that reports a rocker's position (Matter `SwitchLatched`).
+Controllers such as Home Assistant can't follow a switch that changes to it,
+and a position is rarely what automations need.
 
 If you remove a switch node, its Matter endpoint is disabled. Endpoints are
 numbered in node order: the first node is endpoint 1.
@@ -82,13 +82,15 @@ numbered in node order: the first node is endpoint 1.
 ### Changing the switch type
 
 Each switch endpoint has a Matter **Mode Select** cluster named "Switch type",
-with three modes:
+with two modes:
 
 | Mode | Switch type |
 |---|---|
 | 0 | Momentary (push button) |
-| 1 | Latching (rocker) |
-| 2 | Latching, report changes as presses |
+| 2 | Latching (rocker, toggle) |
+
+Mode 1 was an earlier type that reported the rocker's position; it no longer
+exists. A switch stored with it switches to mode 2 on the next boot.
 
 * **Home Assistant** shows it as a dropdown on each switch's device page.
 * **Controllers without Mode Select support** (e.g. Apple Home) don't show it.
@@ -107,12 +109,11 @@ yet.
 
 **Home Assistant** decides a switch's event types only when it creates the
 entity. It never recreates the entity for a known device: re-interviewing and
-power cycling don't help. After changing a switch type, **reload the Matter
-integration** (*Settings → Devices & services → Matter → ⋮ → Reload*) or
-restart Home Assistant. Until then, the events of the new type are dropped. A
-switch changed to latching, for example, only reports `switch_latched` after
-the reload. You can check the result in *Developer tools → States*: the
-switch's `event.…` entity lists its `event_types`.
+power cycling don't help. Both switch types report `multi_press_1`,
+`multi_press_2`, …, so presses keep working after a change. Only the long press
+events of a momentary switch appear or disappear. To update those, reload the
+Matter integration (*Settings → Devices & services → Matter → ⋮ → Reload*) or
+restart Home Assistant.
 
 ## Matter data model
 
@@ -126,8 +127,7 @@ Controllers receive these **Switch cluster events**:
 | Switch type | Feature map | Events |
 |---|---|---|
 | momentary | MS, MSR, MSL, MSM (`0x1E`) | `InitialPress`, `ShortRelease`, `LongPress`, `LongRelease`, `MultiPressOngoing`, `MultiPressComplete` |
-| latching | LS (`0x01`) | `SwitchLatched` (position 1 = closed, 0 = open) |
-| latching-as-press | MS, MSR, MSM (`0x16`) | per change: `InitialPress`, `ShortRelease`; then `MultiPressComplete(n)` |
+| latching | MS, MSR, MSM (`0x16`) | per change of position: `InitialPress`, `ShortRelease`; then `MultiPressComplete(n)` |
 
 Momentary sequences follow the Matter spec and the TC-SWTCH-2.4/2.5
 certification tests:
@@ -325,10 +325,10 @@ interval, battery measurement interval, and warning/critical thresholds.
   is 0 dBm.
 * Switch pins wake the CPU through the GPIO SENSE mechanism (level
   interrupts), not GPIOTE IN channels. SENSE draws no current while idle.
-* A **closed latching switch** (either latching type) would draw about 230 µA through the pull-up
+* A **closed latching switch** would draw about 230 µA through the pull-up
   indefinitely. Instead, the pin is disconnected and sampled for about 10 µs
   every 100 ms (`CONFIG_APP_LATCH_POLL_INTERVAL_MS`), which costs roughly 1 µA.
-  The trade-off is up to 100 ms of latency when the rocker is switched off.
+  The trade-off is up to 100 ms of latency when the switch is opened.
   Momentary buttons draw pull-up current only while held.
 * The battery is measured once per hour on the internal VDD channel, with no
   divider.
@@ -617,7 +617,7 @@ echo "switch subscribe-event-by-id 0xFFFFFFFF 1 60 1 0xFFFF" | $CT interactive s
 
 Press the switches. Each press shows up as a Switch cluster event (0x01
 InitialPress, 0x02 LongPress, 0x03 ShortRelease, 0x04 LongRelease, 0x05
-MultiPressOngoing, 0x06 MultiPressComplete, 0x00 SwitchLatched) on
+MultiPressOngoing, 0x06 MultiPressComplete) on
 endpoints 1–6.
 
 ### Cleaning up
@@ -637,10 +637,6 @@ endpoints 1–6.
 * To save flash, endpoint 0 has none of the optional diagnostics clusters:
   Thread Network Diagnostics, Software Diagnostics and Diagnostic Logs. General
   Diagnostics, which is mandatory, is still there.
-* All six switch endpoints share one endpoint type in the `.zap` file. So a
-  `latching` endpoint still lists `MultiPressMax` in its AttributeList, even
-  though its feature map is `LS`. Controllers ignore this, but it would need
-  separate endpoint types to pass certification.
 * No OTA/DFU and no MCUboot. The goal was a barebones build; enabling
   `SB_CONFIG_MATTER_OTA` also requires MCUboot and a slot in the external
   flash.

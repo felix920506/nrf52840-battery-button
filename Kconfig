@@ -53,11 +53,11 @@ config APP_DEBOUNCE_LATCHING_MS
 	default 20
 	range 1 500
 	help
-	  Debounce time for both latching switch types. Latching-as-press
-	  switches report every bounce that outlasts the debounce time as an
-	  extra press, so noisy contacts may need more than momentary
-	  switches. Nobody flips a switch twice within 100 ms, so values up to
-	  that cost no responsiveness.
+	  Debounce time for latching switches. They report every bounce
+	  that outlasts the debounce time as an extra press, so noisy
+	  contacts may need more than momentary switches. Nobody flips a
+	  switch twice within 100 ms, so values up to that cost no
+	  responsiveness.
 
 config APP_LONG_PRESS_MS
 	int "Momentary switch: hold time for a long press [ms]"
@@ -85,7 +85,7 @@ config APP_LATCH_POLL_INTERVAL_MS
 	help
 	  A closed switch would permanently draw current through the pull-up
 	  resistor (~230 uA at 3 V with the internal 13 kOhm pull-up). While a
-	  latching switch (either latching type) is closed, its pin is
+	  latching switch is closed, its pin is
 	  disconnected and only briefly sampled at this interval. This is the
 	  worst case latency for detecting the switch being opened.
 

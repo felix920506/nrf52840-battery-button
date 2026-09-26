@@ -146,11 +146,6 @@ void switch_gesture_input(uint8_t index, bool active)
 	}
 
 	switch (switch_input_get_type(index)) {
-	case SWITCH_TYPE_LATCHING:
-		emit(index, SWITCH_EVENT_LATCHED,
-		     active ? SWITCH_POSITION_CLOSED : SWITCH_POSITION_OPEN, 0);
-		break;
-
 	case SWITCH_TYPE_LATCHING_AS_PRESS:
 		/*
 		 * The position means nothing, only the change does: report every

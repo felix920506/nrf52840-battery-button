@@ -23,21 +23,19 @@ child-binding:
       enum:
         - "momentary"
         - "latching"
-        - "latching-as-press"
       description: |
+        Default type of the switch; it can be changed later from the smart
+        home app (Matter Mode Select "Switch type").
+
         momentary:
           Push button, closed only while held. Reports press, release,
           long press and multi press.
 
         latching:
-          Rocker/toggle switch whose position can be seen on the switch and
-          means something (e.g. up = on). Reports the switch position.
-
-        latching-as-press:
-          Electrically latching, but the position carries no meaning, e.g.
-          plain-faced rockers (Panasonic Deco Lite, older Panasonic/National/
-          Jimbo module switches) or switches that look like push buttons but
-          latch (Schneider ZenCelo, Panasonic Cosmo Art, Rinsa, Glatima).
-          Every change of state is reported as a short press, so controllers
-          can use it like a push button. Changing it several times quickly
-          counts as a multi press. Long press is not possible.
+          Rocker or toggle switch, including plain-faced rockers (Panasonic
+          Deco Lite, older Panasonic/National/Jimbo module switches) and
+          switches that look like push buttons but latch (Schneider ZenCelo,
+          Panasonic Cosmo Art, Rinsa, Glatima). Every change of position is
+          reported as a short press, so controllers can use it like a push
+          button. Changing it several times quickly counts as a multi press.
+          Long press is not possible.
