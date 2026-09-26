@@ -67,6 +67,31 @@ private: while the device is not paired, anyone in Bluetooth range who knows
 it can add the device. Anyone with physical USB access to the device can
 read it.
 
+### Updating a device
+
+An update keeps everything: the pairing code, the pairings with your
+controllers, the Thread network and the switch types. The device doesn't need
+to be added again.
+
+1. Download the UF2 file for your board from the
+   [latest release](../../releases/latest), the same file name as for the
+   first install. Not `new-pairing-code.uf2`: that one gives the device a
+   new pairing code (the old one stops working for adding it again).
+2. Disconnect the battery, then connect the board over USB.
+3. Double-press reset. On boards without a reset button (Pro Micro,
+   nice!nano, SuperMini) short the RST pad to GND twice quickly. The USB
+   drive appears.
+4. Copy the UF2 file onto the drive (on macOS with `cp -X`, see
+   [Flashing over USB](#flashing-over-usb-uf2-bootloader)). The board
+   restarts with the new firmware; the LED flashes 3 times.
+5. Unplug USB and reconnect the battery. The device rejoins the Thread
+   network by itself; this can take a minute.
+
+Your controller shows the installed firmware version on the device page
+(Home Assistant: *Firmware*): the release tag, or the commit hash for a
+build that isn't a release. The hardware version shows the board the
+firmware was built for.
+
 ## Hardware
 
 ```
