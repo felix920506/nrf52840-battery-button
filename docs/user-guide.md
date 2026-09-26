@@ -92,7 +92,7 @@ event entities after a type change.
 An application-only firmware update preserves the pairing code, controller
 pairings, Thread network, and switch types:
 
-1. Download the matching board's UF2 file from the [latest release](https://github.com/user/nrf52840-battery-button/releases/latest).
+1. Download the matching board's UF2 file from the [latest release](https://github.com/felix920506/nrf52840-battery-button/releases/latest).
 2. Disconnect the battery and connect USB.
 3. Double-press reset to enter the UF2 bootloader. Boards without a reset
    button can enter it by shorting RST to GND twice quickly.
@@ -113,7 +113,7 @@ pairing code remain. After reset, commission the device again using its existing
 pairing code.
 
 To replace the pairing code, download `new-pairing-code.uf2` from the
-[latest release](https://github.com/user/nrf52840-battery-button/releases/latest), enter UF2 bootloader mode, and copy the
+[latest release](https://github.com/felix920506/nrf52840-battery-button/releases/latest), enter UF2 bootloader mode, and copy the
 file to the drive. The device generates a new code after restarting; open the
 USB serial port to read it. Existing controller pairings are not removed by
 changing the code. To start over completely, remove the device from controllers

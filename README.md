@@ -22,7 +22,7 @@ controller, and a Thread border router. Only Home Assistant has been tested;
 this is an uncertified Matter test device, and some ecosystems may reject it.
 
 1. Download the UF2 file for your board from the
-   [latest release](https://github.com/user/nrf52840-battery-button/releases/latest):
+   [latest release](https://github.com/felix920506/nrf52840-battery-button/releases/latest):
 
    | Board | Release file | Switch inputs |
    |---|---|---|
