@@ -2,11 +2,12 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Nordic nRF52840 Dongle (PCA10059): nrf52840dongle/nrf52840.
- * Build-tested only.
+ * Advanced, at your own risk: build-tested only, and not part of the
+ * release builds.
  *
  * The dongle has Nordic's USB DFU bootloader instead of a UF2 bootloader:
- * flash the .hex (or .zip) file with nRF Connect Programmer or nrfutil, see
- * the README.
+ * flash the .hex with nRF Connect Programmer or nrfutil, see "nRF52840 Dongle
+ * (advanced)" in the README.
  *
  * Switch wiring: every switch goes between its pad and GND. The pads are
  * labelled with their pin numbers on the dongle.
