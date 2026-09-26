@@ -1,0 +1,82 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Adafruit Feather nRF52840 Express: adafruit_feather_nrf52840/nrf52840/uf2.
+ * The image also runs on the Feather nRF52840 Sense (same pins, the blue
+ * LED is the same). Build-tested only.
+ *
+ * Switch wiring: every switch goes between its pin and GND.
+ *
+ *   Switch 1 -> A0 (P0.04)      Switch 4 -> A3 (P0.28)
+ *   Switch 2 -> A1 (P0.05)      Switch 5 -> A4 (P0.02)
+ *   Switch 3 -> A2 (P0.30)      Switch 6 -> A5 (P0.03)
+ *
+ * Factory reset: hold the board's USER button for 5 s.
+ *
+ * Battery: connect + to 3V and - to GND (2x AAA or CR2032), not to the LiPo
+ * connector: the battery voltage is measured on the nRF52840 VDD rail.
+ */
+
+/ {
+	aliases {
+		status-led = &led1; /* blue */
+	};
+
+	switches {
+		compatible = "battery-switch,inputs";
+
+		switch_1 {
+			gpios = <&gpio0 4 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 1 (A0)";
+		};
+
+		switch_2 {
+			gpios = <&gpio0 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 2 (A1)";
+		};
+
+		switch_3 {
+			gpios = <&gpio0 30 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 3 (A2)";
+		};
+
+		switch_4 {
+			gpios = <&gpio0 28 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 4 (A3)";
+		};
+
+		switch_5 {
+			gpios = <&gpio0 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 5 (A4)";
+		};
+
+		switch_6 {
+			gpios = <&gpio0 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 6 (A5)";
+		};
+	};
+
+	zephyr,user {
+		/* USER button (P1.02), inside the enclosure. */
+		factory-reset-gpios = <&gpio1 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+	};
+};
+
+/* The Feather ships with SoftDevice S140 v6: the application starts at 0x26000. */
+#define UF2_APP_START 0x26000
+#include "uf2_matter_layout.dtsi"
+
+/* Peripherals that are not used; disabling them avoids idle current. */
+&uart0 {
+	status = "disabled";
+};
+
+&i2c0 {
+	status = "disabled";
+};
+
+&spi1 {
+	status = "disabled";
+};
+
+#include "battery_switch_common.dtsi"

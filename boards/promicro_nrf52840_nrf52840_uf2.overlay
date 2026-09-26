@@ -1,0 +1,88 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Pro Micro nRF52840 and compatibles (nice!nano, SuperMini nRF52840, ...):
+ * promicro_nrf52840/nrf52840/uf2. Build-tested only.
+ *
+ * Switch wiring: every switch goes between its pin and GND.
+ *
+ *   Switch 1 -> 017 (P0.17, "D2")    Switch 4 -> 024 (P0.24, "D5")
+ *   Switch 2 -> 020 (P0.20, "D3")    Switch 5 -> 100 (P1.00, "D6")
+ *   Switch 3 -> 022 (P0.22, "D4")    Switch 6 -> 011 (P0.11, "D7")
+ *
+ * Factory reset: hold 106 (P1.06, "D9") to GND for 5 s.
+ *
+ * Battery: connect + to VCC (3.3 V pin) and - to GND (2x AAA or CR2032), not
+ * to B+/RAW: the battery voltage is measured on the nRF52840 VDD rail.
+ */
+
+/ {
+	aliases {
+		status-led = &led0;
+	};
+
+	switches {
+		compatible = "battery-switch,inputs";
+
+		switch_1 {
+			gpios = <&gpio0 17 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 1 (P0.17)";
+		};
+
+		switch_2 {
+			gpios = <&gpio0 20 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 2 (P0.20)";
+		};
+
+		switch_3 {
+			gpios = <&gpio0 22 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 3 (P0.22)";
+		};
+
+		switch_4 {
+			gpios = <&gpio0 24 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 4 (P0.24)";
+		};
+
+		switch_5 {
+			gpios = <&gpio1 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 5 (P1.00)";
+		};
+
+		switch_6 {
+			gpios = <&gpio0 11 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 6 (P0.11)";
+		};
+	};
+
+	zephyr,user {
+		factory-reset-gpios = <&gpio1 6 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+	};
+};
+
+/* These boards ship with SoftDevice S140 v6: the application starts at 0x26000. */
+#define UF2_APP_START 0x26000
+#include "uf2_matter_layout.dtsi"
+
+/* The board's default peripherals use the switch pins; none are needed. */
+&uart0 {
+	status = "disabled";
+};
+
+&i2c0 {
+	status = "disabled";
+};
+
+&i2c1 {
+	status = "disabled";
+};
+
+&spi2 {
+	status = "disabled";
+};
+
+&pwm0 {
+	status = "disabled";
+};
+
+#include "battery_switch_common.dtsi"
