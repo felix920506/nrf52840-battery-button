@@ -25,6 +25,9 @@
  */
 
 / {
+	/* Shown as the hardware version by Matter controllers. */
+	model = "Seeed XIAO nRF52840";
+
 	aliases {
 		status-led = &led2; /* blue */
 	};

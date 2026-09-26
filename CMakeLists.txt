@@ -10,6 +10,13 @@ project(battery-switch)
 
 target_include_directories(app PRIVATE src)
 
+# Board name (devicetree model), shown as the hardware version by Matter
+# controllers. Root node properties aren't exported to CMake, so it is read
+# from the generated devicetree.
+file(STRINGS ${ZEPHYR_DTS} board_model REGEX "^\tmodel = \"" LIMIT_COUNT 1)
+string(REGEX REPLACE "^\tmodel = \"([^\"]*)\".*" "\\1" board_model "${board_model}")
+target_compile_definitions(app PRIVATE "APP_BOARD_NAME=\"${board_model}\"")
+
 # Transport-independent core: switch inputs, gesture detection, battery, LED.
 target_sources(app PRIVATE
   src/main.c

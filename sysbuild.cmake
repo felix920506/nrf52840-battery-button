@@ -9,6 +9,36 @@
 # this file leave the factory data page, and so the pairing code, untouched.
 #
 
+# Software version shown by Matter controllers: the tag if HEAD is tagged,
+# otherwise the short commit hash.
+find_package(Git QUIET)
+if(GIT_FOUND)
+  execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --exact-match HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+    OUTPUT_VARIABLE fw_version OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  if(NOT fw_version)
+    execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+      WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+      OUTPUT_VARIABLE fw_version OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  endif()
+  if(fw_version)
+    set_config_string(${DEFAULT_IMAGE} CONFIG_CHIP_DEVICE_SOFTWARE_VERSION_STRING "${fw_version}")
+  endif()
+
+  # Configure again when HEAD moves or tags change.
+  execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --absolute-git-dir
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+    OUTPUT_VARIABLE git_dir OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  execute_process(COMMAND ${GIT_EXECUTABLE} symbolic-ref -q HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+    OUTPUT_VARIABLE git_branch_ref OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  foreach(f HEAD ${git_branch_ref} packed-refs refs/tags)
+    if(git_dir AND EXISTS ${git_dir}/${f})
+      set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${git_dir}/${f})
+    endif()
+  endforeach()
+endif()
+
 set(battery_switch_app_hex ${CMAKE_BINARY_DIR}/${DEFAULT_IMAGE}/zephyr/zephyr.hex)
 set(battery_switch_app_uf2 ${CMAKE_BINARY_DIR}/battery_switch_app.uf2)
 

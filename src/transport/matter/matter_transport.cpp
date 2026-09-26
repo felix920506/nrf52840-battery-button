@@ -40,6 +40,7 @@
 #include <app/util/endpoint-config-api.h>
 #include <app/util/generic-callbacks.h>
 #include <platform/CHIPDeviceLayer.h>
+#include <platform/nrfconnect/FactoryDataProvider.h>
 #include <setup_payload/OnboardingCodesUtil.h>
 
 #include <zephyr/logging/log.h>
@@ -59,6 +60,26 @@ constexpr EndpointId kFirstSwitchEndpoint = 1;
 
 /* Common Number semantic tag namespace: tag N means "N". */
 constexpr uint8_t kNamespaceCommonNumber = 0x07;
+
+/*
+ * Factory data, except that the hardware version string is the board this
+ * firmware was built for (devicetree model), not the value stored when the
+ * device was provisioned.
+ */
+class BoardFactoryDataProvider : public FactoryDataProvider<InternalFlashFactoryData>
+{
+public:
+	CHIP_ERROR GetHardwareVersionString(char *buf, size_t bufSize) override
+	{
+		static constexpr char kBoard[] = APP_BOARD_NAME;
+
+		VerifyOrReturnError(bufSize >= sizeof(kBoard), CHIP_ERROR_BUFFER_TOO_SMALL);
+		memcpy(buf, kBoard, sizeof(kBoard));
+		return CHIP_NO_ERROR;
+	}
+};
+
+BoardFactoryDataProvider sFactoryDataProvider;
 
 transport_switch_config sSwitches;
 const battery_info *sBattery;
@@ -274,6 +295,7 @@ int transport_init(const struct transport_switch_config *switches, const struct 
 	Clusters::ModeSelect::setSupportedModesManager(&sSwitchModes);
 
 	Nrf::Matter::InitData initData;
+	initData.mFactoryDataProvider = &sFactoryDataProvider;
 #ifdef CONFIG_CHIP_FACTORY_DATA
 	/* Generic firmware image: the first boot creates the pairing credentials. */
 	initData.mPreServerInitClbk = SelfProvisionFactoryData;

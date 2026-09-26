@@ -28,6 +28,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: ws/nrf52840-battery-button
+          # Full history with tags: the firmware version is the tag or the
+          # short commit hash (see CMakeLists.txt).
+          fetch-depth: 0
 
       - name: Install nrfutil and the nRF Connect SDK toolchain
         run: |
