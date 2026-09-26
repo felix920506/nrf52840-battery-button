@@ -99,10 +99,20 @@ The device applies the new type immediately. It changes the electrical handling
 (e.g. the power-saving polling of closed latching switches), the Switch cluster
 feature map and the events. The type is stored in flash and survives reboots,
 firmware updates and factory resets: it describes the wiring, which doesn't
-change when you re-pair. After changing the type, reload the device in the
-controller if it keeps showing the old switch behaviour. In Home Assistant, use
-"Re-interview device". Controllers cache the feature map, and this Matter SDK
-can't flag the change through `ConfigurationVersion` yet.
+change when you re-pair.
+
+Controllers may keep using the old switch behaviour until they re-read the
+device. This Matter SDK can't flag the change through `ConfigurationVersion`
+yet.
+
+**Home Assistant** decides a switch's event types only when it creates the
+entity. It never recreates the entity for a known device: re-interviewing and
+power cycling don't help. After changing a switch type, **reload the Matter
+integration** (*Settings → Devices & services → Matter → ⋮ → Reload*) or
+restart Home Assistant. Until then, the events of the new type are dropped. A
+switch changed to latching, for example, only reports `switch_latched` after
+the reload. You can check the result in *Developer tools → States*: the
+switch's `event.…` entity lists its `event_types`.
 
 ## Matter data model
 
