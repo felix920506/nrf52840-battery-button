@@ -148,6 +148,15 @@ config APP_STATUS_LED
 	  Uses the devicetree alias 'status-led' for pairing, identify and
 	  factory reset feedback. Blinks are short to save power.
 
+config APP_BOOT_FLASHES
+	int "Status LED: flashes at startup"
+	depends on APP_STATUS_LED
+	default 3
+	range 0 10
+	help
+	  Quick flashes when the firmware starts, as a sign of life after
+	  inserting the battery or flashing. 0 disables them.
+
 config APP_PRODUCT_NAME
 	string "Product name shown on the USB serial port"
 	default "Battery Switch"

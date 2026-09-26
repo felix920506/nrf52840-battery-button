@@ -392,6 +392,8 @@ interval, battery measurement interval, and warning/critical thresholds.
   `tools/provision_device.py`, in `build/devices/<serial>/`. It uses the Matter **test** vendor/product ID and
   development attestation certificates, so controllers show it as an
   uncertified test device.
+* **Startup:** the blue LED flashes 3 times when the firmware starts
+  (`CONFIG_APP_BOOT_FLASHES`, 0 to disable), then stays off.
 * **Identify:** the blue LED blinks.
 * **Factory reset:** hold the **reset pad D9** to GND for 5 s
   (`CONFIG_APP_FACTORY_RESET_HOLD_MS`). The LED flashes once when the pad is

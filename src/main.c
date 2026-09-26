@@ -126,6 +126,9 @@ int main(void)
 	if (err) {
 		LOG_WRN("Status LED init failed (%d)", err);
 	}
+#if CONFIG_APP_BOOT_FLASHES > 0
+	status_led_flash(CONFIG_APP_BOOT_FLASHES);
+#endif
 
 	err = battery_init();
 	if (err) {
