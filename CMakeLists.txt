@@ -22,6 +22,10 @@ target_sources(app PRIVATE
   src/core/switch_input.c
 )
 
+target_sources_ifdef(CONFIG_APP_USB_INFO app PRIVATE
+  src/core/usb_info.c
+  src/third_party/qrcodegen/qrcodegen.c
+)
 target_sources_ifdef(CONFIG_APP_USB_BOOTLOADER_RESET app PRIVATE src/core/usb_bootloader.c)
 target_sources_ifdef(CONFIG_APP_TRANSPORT_BLE app PRIVATE src/transport/ble/ble_transport.c)
 
@@ -46,6 +50,7 @@ if(CONFIG_APP_TRANSPORT_MATTER)
     ${MATTER_COMMONS_SRC_DIR}/clusters/cluster_init.cpp
     src/transport/matter/matter_transport.cpp
   )
+  target_sources_ifdef(CONFIG_CHIP_FACTORY_DATA app PRIVATE src/transport/matter/self_provision.cpp)
 
   zephyr_linker_sources(SECTIONS ${MATTER_COMMONS_SRC_DIR}/clusters/cluster_init.ld)
 

@@ -1,4 +1,0 @@
-/* Re-enable USB for usb-logging.conf (the board overlay disables it). */
-&usbd {
-	status = "okay";
-};

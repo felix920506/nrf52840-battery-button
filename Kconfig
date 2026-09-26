@@ -148,6 +148,21 @@ config APP_STATUS_LED
 	  Uses the devicetree alias 'status-led' for pairing, identify and
 	  factory reset feedback. Blinks are short to save power.
 
+config APP_PRODUCT_NAME
+	string "Product name shown on the USB serial port"
+	default "Battery Switch"
+
+config APP_USB_INFO
+	bool "Show the pairing code on the USB serial port"
+	depends on USBD_CDC_ACM_CLASS && UART_LINE_CTRL
+	depends on !CDC_ACM_SERIAL_INITIALIZE_AT_BOOT
+	default y
+	help
+	  When a terminal opens the USB serial port, print the pairing code
+	  and QR code. USB is only enabled while USB power is present, so it
+	  costs no current on battery. Not available with the USB console
+	  (usb-logging.conf), which logs the pairing code instead.
+
 config APP_FACTORY_RESET_HOLD_MS
 	int "Reset pad: hold time for factory reset [ms]"
 	default 5000

@@ -24,8 +24,6 @@
  * voltage is measured internally on the nRF52840 VDD rail.
  */
 
-#include <zephyr/dt-bindings/adc/nrf-saadc.h>
-
 / {
 	aliases {
 		status-led = &led2; /* blue */
@@ -66,7 +64,6 @@
 	};
 
 	zephyr,user {
-		io-channels = <&adc 0>;
 		/*
 		 * Factory reset pad: D9 (P1.14), on the edge with the power
 		 * pins, two pads away from 3V3. Hold it to GND for 5 s to erase
@@ -75,23 +72,6 @@
 		 * or wire it to a service button inside the enclosure.
 		 */
 		factory-reset-gpios = <&gpio1 14 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
-	};
-};
-
-/* Battery voltage = nRF52840 VDD (battery connected to 3V3). */
-&adc {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	status = "okay";
-
-	channel@0 {
-		reg = <0>;
-		zephyr,gain = "ADC_GAIN_1_6";
-		zephyr,reference = "ADC_REF_INTERNAL";
-		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 10)>;
-		zephyr,input-positive = <NRF_SAADC_VDD>;
-		zephyr,resolution = <12>;
-		zephyr,oversampling = <4>;
 	};
 };
 
@@ -116,6 +96,4 @@
 	status = "disabled";
 };
 
-&usbd {
-	status = "disabled";
-};
+#include "battery_switch_common.dtsi"

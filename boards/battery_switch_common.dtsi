@@ -1,0 +1,40 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Parts shared by all board overlays. Include it at the end of the overlay.
+ */
+
+#include <zephyr/dt-bindings/adc/nrf-saadc.h>
+
+/ {
+	zephyr,user {
+		io-channels = <&adc 0>;
+	};
+};
+
+/* Battery voltage = nRF52840 VDD (battery connected to the 3V3 pin). */
+&adc {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	channel@0 {
+		reg = <0>;
+		zephyr,gain = "ADC_GAIN_1_6";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 10)>;
+		zephyr,input-positive = <NRF_SAADC_VDD>;
+		zephyr,resolution = <12>;
+		zephyr,oversampling = <4>;
+	};
+};
+
+/*
+ * USB serial port showing the pairing code (src/core/usb_info.c). USB is
+ * only enabled while USB power is present. The output fits into the TX
+ * FIFO, so a terminal that stops reading can't block the application.
+ */
+&board_cdc_acm_uart {
+	tx-fifo-size = <2048>;
+	rx-fifo-size = <64>;
+};

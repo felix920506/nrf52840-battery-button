@@ -31,6 +31,8 @@ enum app_evt_type {
 	APP_EVT_RESET_PIN,
 	/* reset_pin: hold time of the reset pad elapsed, `arg` is its generation. */
 	APP_EVT_FACTORY_RESET_TIMER,
+	/* usb_info: a terminal opened the USB serial port. */
+	APP_EVT_USB_TERMINAL,
 };
 
 struct app_evt {

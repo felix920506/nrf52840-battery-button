@@ -26,6 +26,9 @@
 #include "core/status_led.h"
 
 #include "app/matter_init.h"
+#ifdef CONFIG_CHIP_FACTORY_DATA
+#include "self_provision.h"
+#endif
 
 #include <app-common/zap-generated/attributes/Accessors.h>
 #include <app-common/zap-generated/ids/Clusters.h>
@@ -37,6 +40,7 @@
 #include <app/util/endpoint-config-api.h>
 #include <app/util/generic-callbacks.h>
 #include <platform/CHIPDeviceLayer.h>
+#include <setup_payload/OnboardingCodesUtil.h>
 
 #include <zephyr/logging/log.h>
 
@@ -270,6 +274,10 @@ int transport_init(const struct transport_switch_config *switches, const struct 
 	Clusters::ModeSelect::setSupportedModesManager(&sSwitchModes);
 
 	Nrf::Matter::InitData initData;
+#ifdef CONFIG_CHIP_FACTORY_DATA
+	/* Generic firmware image: the first boot creates the pairing credentials. */
+	initData.mPreServerInitClbk = SelfProvisionFactoryData;
+#endif
 	initData.mPostServerInitClbk = PostServerInit;
 
 	CHIP_ERROR err = Nrf::Matter::PrepareServer(initData);
@@ -399,4 +407,27 @@ void transport_factory_reset(void)
 	StackLock lock;
 
 	Server::GetInstance().ScheduleFactoryReset();
+}
+
+void transport_get_pairing_info(struct transport_pairing_info *info)
+{
+	StackLock lock;
+	RendezvousInformationFlags flags(RendezvousInformationFlag::kBLE);
+	char manual[kManualSetupLongCodeCharLength + 1];
+	MutableCharSpan manualSpan(manual);
+	MutableCharSpan qrSpan(info->qr, sizeof(info->qr) - 1);
+
+	info->provisioned = Server::GetInstance().GetFabricTable().FabricCount() != 0;
+	(void)GetDeviceInstanceInfoProvider()->GetSerialNumber(info->serial, sizeof(info->serial));
+
+	/* Fails if the device doesn't store its passcode (tools/provision_device.py). */
+	if (GetQRCode(qrSpan, flags) != CHIP_NO_ERROR || GetManualPairingCode(manualSpan, flags) != CHIP_NO_ERROR ||
+	    manualSpan.size() != 11) {
+		info->qr[0] = '\0';
+		strncpy(info->hint, "Pairing code: see the label that came with the device.", sizeof(info->hint) - 1);
+		return;
+	}
+
+	/* 11 digits, shown as 1234-567-8901 like on Matter labels. */
+	snprintf(info->code, sizeof(info->code), "%.4s-%.3s-%.4s", manual, manual + 4, manual + 7);
 }

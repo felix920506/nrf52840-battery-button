@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Builds build/battery_switch_app.uf2 for the Adafruit UF2 bootloader. It
-# contains the application only, never Matter factory data: every device needs
-# its own onboarding credentials, which tools/provision_device.py generates
-# into a per-device image. Use this file to update devices that are already
-# provisioned; their factory data page is left untouched.
+# contains the application only, never Matter factory data, so the same file
+# works for every device: a device creates its own onboarding credentials on
+# first boot (src/transport/matter/self_provision.cpp), or gets them from a
+# per-device image made by tools/provision_device.py. Firmware updates with
+# this file leave the factory data page, and so the pairing code, untouched.
 #
 
 set(battery_switch_app_hex ${CMAKE_BINARY_DIR}/${DEFAULT_IMAGE}/zephyr/zephyr.hex)

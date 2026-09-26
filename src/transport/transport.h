@@ -59,6 +59,23 @@ void transport_start_pairing(void);
 /* Erase all network credentials and settings, then reboot. */
 void transport_factory_reset(void);
 
+/* How to pair the device, shown on the USB serial port. Empty strings are not shown. */
+struct transport_pairing_info {
+	/* Serial number or other identification. */
+	char serial[33];
+	/* Code to enter in the smart home app. */
+	char code[24];
+	/* Content of the pairing QR code. */
+	char qr[32];
+	/* Shown instead of the code if the device doesn't know it. */
+	char hint[96];
+	/* True once added to a network/controller. */
+	bool provisioned;
+};
+
+/* Fills in `info`, which the caller has zeroed. */
+void transport_get_pairing_info(struct transport_pairing_info *info);
+
 #ifdef __cplusplus
 }
 #endif

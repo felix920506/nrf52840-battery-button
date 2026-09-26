@@ -37,6 +37,8 @@
 #include <zephyr/bluetooth/services/bas.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+
+#include <string.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/reboot.h>
 
@@ -247,4 +249,11 @@ void transport_factory_reset(void)
 {
 	/* Nothing is stored; a reboot restores the initial state. */
 	sys_reboot(SYS_REBOOT_COLD);
+}
+
+void transport_get_pairing_info(struct transport_pairing_info *info)
+{
+	strncpy(info->hint, "Bluetooth LE test firmware: no pairing needed, connect with tools/ble_test_client.py.",
+		sizeof(info->hint) - 1);
+	info->provisioned = transport_is_provisioned();
 }

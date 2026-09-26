@@ -12,6 +12,7 @@
 #include "core/reset_pin.h"
 #include "core/switch_config.h"
 #include "core/status_led.h"
+#include "core/usb_info.h"
 #include "core/switch_gesture.h"
 #include "core/switch_input.h"
 #include "transport/transport.h"
@@ -86,12 +87,13 @@ static void measure_battery(void)
 static void suspend_external_flash(void)
 {
 	/*
-	 * The XIAO has a 2 MB QSPI flash that is not used. Put it into deep
-	 * power-down, otherwise it idles in standby and wastes current.
+	 * Boards like the XIAO and the Feather have a 2 MB QSPI flash that is
+	 * not used. Put it into deep power-down, otherwise it idles in standby
+	 * and wastes current.
 	 */
 #if defined(CONFIG_NORDIC_QSPI_NOR) && defined(CONFIG_PM_DEVICE) &&                                \
-	DT_NODE_HAS_STATUS_OKAY(DT_NODELABEL(p25q16h))
-	const struct device *flash = DEVICE_DT_GET(DT_NODELABEL(p25q16h));
+	DT_HAS_COMPAT_STATUS_OKAY(nordic_qspi_nor)
+	const struct device *flash = DEVICE_DT_GET(DT_COMPAT_GET_ANY_STATUS_OKAY(nordic_qspi_nor));
 
 	if (device_is_ready(flash)) {
 		(void)pm_device_action_run(flash, PM_DEVICE_ACTION_SUSPEND);
@@ -146,6 +148,13 @@ int main(void)
 		LOG_WRN("No factory reset pad (%d)", err);
 	}
 
+#ifdef CONFIG_APP_USB_INFO
+	err = usb_info_init();
+	if (err) {
+		LOG_WRN("USB init failed (%d)", err);
+	}
+#endif
+
 	measure_battery();
 	k_timer_start(&battery_timer, K_SECONDS(CONFIG_APP_BATTERY_MEASURE_INTERVAL_S),
 		      K_SECONDS(CONFIG_APP_BATTERY_MEASURE_INTERVAL_S));
@@ -174,6 +183,11 @@ int main(void)
 		case APP_EVT_FACTORY_RESET_TIMER:
 			reset_pin_process(&evt);
 			break;
+#ifdef CONFIG_APP_USB_INFO
+		case APP_EVT_USB_TERMINAL:
+			usb_info_print();
+			break;
+#endif
 		default:
 			break;
 		}
