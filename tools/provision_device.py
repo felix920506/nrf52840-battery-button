@@ -20,6 +20,9 @@ modules (cbor2, cryptography, ecdsa, qrcode, jsonschema, intelhex):
     nrfutil sdk-manager toolchain launch --ncs-version v3.4.1 -- \\
         python3 tools/provision_device.py --build-dir build --count 3
 
+To rebuild an existing device's image for a new firmware build while keeping
+its credentials, pass its directory: --from-device build/devices/<serial>.
+
 Output, per device, in <build-dir>/devices/<serial>/:
     <serial>.uf2           application + factory data, copy to the UF2 drive
     <serial>.hex           the same for serial DFU / SWD programming
@@ -156,6 +159,21 @@ def provision(args, config, matter_root, app_hex, fd_offset, fd_size, serial):
     return out_dir, qr.group(0) if qr else "?", manual.group(0) if manual else "?", discriminator
 
 
+def rebuild(app_hex, fd_offset, device_dir):
+    """New application, the device's existing factory data (and pairing code)."""
+    serial = os.path.basename(os.path.normpath(device_dir))
+    fd_hex = IntelHex(os.path.join(device_dir, "factory_data.hex"))
+    if fd_hex.minaddr() != fd_offset:
+        raise SystemExit(f"{serial}: factory data at {hex(fd_hex.minaddr())}, but this build expects {hex(fd_offset)}")
+    image = IntelHex(app_hex)
+    if image.maxaddr() >= fd_offset:
+        raise SystemExit("Application overlaps the factory data partition")
+    image.merge(fd_hex, overlap="error")
+    image.write_hex_file(os.path.join(device_dir, serial + ".hex"))
+    write_uf2(image, os.path.join(device_dir, serial + ".uf2"))
+    return serial
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--build-dir", required=True, help="sysbuild build directory of the Matter firmware")
@@ -163,6 +181,9 @@ def main():
     parser.add_argument("--serial", action="append", default=[],
                         help="serial number(s) to use instead of random ones (max. 20 characters)")
     parser.add_argument("--out-dir", help="output directory (default: <build-dir>/devices)")
+    parser.add_argument("--from-device", action="append", default=[], metavar="DIR",
+                        help="rebuild the image of an already provisioned device (its directory "
+                             "from an earlier run) with this build's application, same credentials")
     args = parser.parse_args()
 
     build_dir = os.path.abspath(args.build_dir)
@@ -175,6 +196,13 @@ def main():
     matter_root = find_matter_root(build_dir)
     fd_offset, fd_size = factory_partition(app_dir)
     app_hex = os.path.join(app_dir, "zephyr", "zephyr.hex")
+
+    if args.from_device:
+        for device_dir in args.from_device:
+            serial = rebuild(app_hex, fd_offset, os.path.abspath(device_dir))
+            print(f"{serial}: rebuilt with the new application, pairing code unchanged")
+            print(f"    {os.path.relpath(os.path.abspath(device_dir))}/{serial}.uf2")
+        return 0
 
     serials = args.serial or [f"BSW-{secrets.token_hex(6).upper()}" for _ in range(args.count)]
     for serial in serials:
