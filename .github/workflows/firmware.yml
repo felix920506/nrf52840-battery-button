@@ -1,0 +1,110 @@
+# Builds the ready-to-flash UF2 files, one per board. Every device creates
+# its own pairing code on first boot, so the same file works for all devices
+# of a board type.
+#
+# Pushing a tag like v1.0.0 publishes the files as a GitHub release.
+
+name: Firmware
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NCS_VERSION: v3.4.1
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # One file per board family: the XIAO file also runs on the XIAO
+        # Sense and Plus, the Feather file on the Feather Sense.
+        include:
+          - name: xiao-nrf52840
+            board: xiao_ble/nrf52840
+          - name: feather-nrf52840
+            board: adafruit_feather_nrf52840/nrf52840/uf2
+          - name: promicro-nrf52840
+            board: promicro_nrf52840/nrf52840/uf2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ws/nrf52840-battery-button
+
+      - name: Install nrfutil and the nRF Connect SDK toolchain
+        run: |
+          mkdir -p ~/.local/bin
+          curl -sSfL -o ~/.local/bin/nrfutil \
+            https://files.nordicsemi.com/artifactory/swtools/external/nrfutil/executables/x86_64-unknown-linux-gnu/nrfutil
+          chmod +x ~/.local/bin/nrfutil
+          echo ~/.local/bin >> "$GITHUB_PATH"
+          ~/.local/bin/nrfutil install sdk-manager
+          ~/.local/bin/nrfutil sdk-manager toolchain install --ncs-version "$NCS_VERSION"
+
+      - name: Cache the SDK sources
+        uses: actions/cache@v4
+        with:
+          path: |
+            ws/.west
+            ws/bootloader
+            ws/modules
+            ws/nrf
+            ws/nrfxlib
+            ws/test
+            ws/tools
+            ws/zephyr
+          key: ncs-${{ env.NCS_VERSION }}-${{ hashFiles('ws/nrf52840-battery-button/west.yml') }}
+
+      - name: Fetch the SDK
+        working-directory: ws
+        run: |
+          [ -d .west ] || nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
+            west init -l nrf52840-battery-button
+          nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
+            west update --narrow -o=--depth=1
+
+      - name: Build
+        working-directory: ws/nrf52840-battery-button
+        run: |
+          nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
+            west build -b "${{ matrix.board }}" --sysbuild -d build
+          mkdir -p out
+          cp build/battery_switch_app.uf2 "out/battery-switch-${{ matrix.name }}.uf2"
+
+      # Same flash layout on every board, so one file serves all of them.
+      - name: New pairing code UF2
+        if: matrix.name == 'xiao-nrf52840'
+        working-directory: ws/nrf52840-battery-button
+        run: |
+          nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
+            python3 tools/provision_device.py --build-dir build --blank out/new-pairing-code.uf2
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: battery-switch-${{ matrix.name }}
+          path: ws/nrf52840-battery-button/out/*.uf2
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" out/*.uf2 --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" --generate-notes

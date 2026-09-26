@@ -23,6 +23,10 @@ modules (cbor2, cryptography, ecdsa, qrcode, jsonschema, intelhex):
 To rebuild an existing device's image for a new firmware build while keeping
 its credentials, pass its directory: --from-device build/devices/<serial>.
 
+Devices running the generic firmware create their own credentials at first
+boot when the factory data page is empty. --blank OUT.uf2 writes a UF2 file
+that erases the page, to make such a device create a new pairing code.
+
 Output, per device, in <build-dir>/devices/<serial>/:
     <serial>.uf2           application + factory data, copy to the UF2 drive
     <serial>.hex           the same for serial DFU / SWD programming
@@ -181,6 +185,10 @@ def main():
     parser.add_argument("--serial", action="append", default=[],
                         help="serial number(s) to use instead of random ones (max. 20 characters)")
     parser.add_argument("--out-dir", help="output directory (default: <build-dir>/devices)")
+    parser.add_argument("--blank", metavar="UF2",
+                        help="write a UF2 file that erases the factory data page instead; a device "
+                             "running the generic firmware then creates a new pairing code at its "
+                             "next start")
     parser.add_argument("--from-device", action="append", default=[], metavar="DIR",
                         help="rebuild the image of an already provisioned device (its directory "
                              "from an earlier run) with this build's application, same credentials")
@@ -196,6 +204,13 @@ def main():
     matter_root = find_matter_root(build_dir)
     fd_offset, fd_size = factory_partition(app_dir)
     app_hex = os.path.join(app_dir, "zephyr", "zephyr.hex")
+
+    if args.blank:
+        blank = IntelHex()
+        blank.frombytes(b"\xff" * fd_size, offset=fd_offset)
+        write_uf2(blank, args.blank)
+        print(f"{args.blank}: erases the factory data page at {hex(fd_offset)}")
+        return 0
 
     if args.from_device:
         for device_dir in args.from_device:
