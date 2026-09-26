@@ -128,7 +128,6 @@ credentials and the larger development layout:
 
 ```sh
 west build -b xiao_ble/nrf52840 --sysbuild -d build-debug -- \
-  -DSB_CONFIG_MATTER_FACTORY_DATA_GENERATE=n \
   "-DEXTRA_CONF_FILE=debug.conf;dev/no-factory-data.conf" \
   -DEXTRA_DTC_OVERLAY_FILE=dev/large-app.overlay
 ```
@@ -140,19 +139,58 @@ Resulting image sizes with nRF Connect SDK v3.4.1:
 | default (low power) | 561 KB | 608 KB | 159 KB |
 | debug (no factory data, `dev/large-app.overlay`) | 625 KB | 788 KB | 161 KB |
 
+### Per-device pairing codes
+
+Every device needs its own Matter setup code. The Matter SDK's test code
+(passcode `20202021`) is public: anyone in BLE range could commission a device
+using it while its commissioning window is open. So the build doesn't generate
+any pairing credentials. Instead,
+[`tools/provision_device.py`](tools/provision_device.py) creates a firmware
+image per device. For each device it picks:
+
+* a random setup passcode (from the whole valid range, skipping the values
+  the specification forbids),
+* a random discriminator,
+* a random SPAKE2+ salt,
+* a unique serial number.
+
+It writes them into that device's factory data. Only the SPAKE2+ verifier is
+stored on the device, never the passcode, so the code can't be read back from
+the chip.
+
+```sh
+nrfutil sdk-manager toolchain launch --ncs-version v3.4.1 -- \
+  python3 tools/provision_device.py --build-dir build --count 5
+```
+
+For each device, `build/devices/<serial>/` then contains:
+
+| File | Use |
+|---|---|
+| `<serial>.uf2` | first flash (application + this device's factory data) |
+| `<serial>.hex` | the same, for serial DFU or an SWD probe |
+| `<serial>.png` | pairing QR code, e.g. to print as a label |
+| `<serial>.txt` | QR code payload and manual pairing code |
+
+**Keep the QR code and the `.txt` file private, and with the device.** They
+are the only way to commission it. If you lose them, provision the device
+again: the new image carries a new code.
+
 ### Flashing over USB (UF2 bootloader)
 
 The build keeps the XIAO's stock Adafruit UF2 bootloader. You don't need a
 debug probe:
 
 1. Connect the XIAO over USB. Remove the battery first.
-2. Double-press the reset button. A USB drive appears, named `XIAO-BOOT` or `XIAO-SENSE` depending on the bootloader version.
-3. Copy `build/battery_switch.uf2` to the drive. The XIAO reboots into the
-   firmware once the copy finishes.
-
-`battery_switch.uf2` contains both the application and the Matter factory data
-(pairing credentials). The `zephyr.uf2` that Zephyr normally builds isn't
-produced here, because it would lack the factory data.
+2. Double-press the reset button. A USB drive appears, named `XIAO-BOOT` or
+   `XIAO-SENSE` depending on the bootloader version.
+3. Copy the file to the drive with `cp -X`; on macOS, a plain `cp` or Finder can
+   hang on large files. The XIAO reboots into the firmware once the copy
+   finishes.
+   * **First flash:** the device's own `build/devices/<serial>/<serial>.uf2`.
+   * **Firmware update:** `build/battery_switch_app.uf2`. It contains only the
+     application and leaves the factory data page alone, so the device keeps
+     its pairing code.
 
 Flash layout ([`boards/uf2_matter_layout.dtsi`](boards/uf2_matter_layout.dtsi)):
 
@@ -193,13 +231,14 @@ add an overlay for it in `boards/`, following
 3. **The `zephyr,user` ADC channel** measuring VDD (copy it as is), and a
    `status-led` alias if the board has an LED.
 
-The build produces the same combined `battery_switch.uf2`.
+Build, provision and flash exactly as for the XIAO.
 
 ### Flashing with an SWD probe
 
-`west flash` also works, with a J-Link or another probe on the SWD pads under
-the XIAO. It programs the application and the factory data and leaves the
-bootloader alone.
+A J-Link or another probe on the SWD pads under the XIAO works too, and leaves
+the bootloader alone. For a first flash, program the device's image:
+`west flash --hex-file build/devices/<serial>/<serial>.hex`. A plain
+`west flash` programs only the application, which is enough for an update.
 
 Choose the battery type with `west build -t menuconfig` → *Battery switch
 application → Battery*, or in `prj.conf`:
@@ -218,13 +257,12 @@ interval, battery measurement interval, and warning/critical thresholds.
 
 * **Commissioning:** after the first boot the device advertises over BLE for 15
   minutes, and the blue LED blinks briefly every 2 s. Pressing any switch
-  restarts advertising while the device isn't commissioned. The QR code is
-  in `build/matter_factory_data/zephyr/factory_data.png`, and the setup
-  details are in `factory_data.json` next to it. They are also printed to the
-  RTT log in a `debug.conf` build. By default the passcode is `20202021` and
-  the discriminator is `3840`, so the manual pairing code is `34970112332`.
-  The build uses the Matter **test** vendor/product ID and test certificates,
-  so controllers show it as an uncertified test device.
+  restarts advertising while the device isn't commissioned. In the controller
+  app (Apple Home, Google Home, Home Assistant, …), scan the device's QR code
+  from `build/devices/<serial>/<serial>.png`, or enter the manual code from
+  `<serial>.txt`. It uses the Matter **test** vendor/product ID and
+  development attestation certificates, so controllers show it as an
+  uncertified test device.
 * **Identify:** the blue LED blinks.
 * **Factory reset:**
   * momentary switch 1: hold it for 10 s
@@ -264,7 +302,7 @@ src/core/status_led.*         LED patterns
 src/transport/transport.h     interface to the radio protocol
 src/transport/matter/         Matter over Thread implementation
 src/default_zap/              Matter data model (.zap) and generated code
-sysbuild.cmake                builds battery_switch.uf2 (app + factory data)
+sysbuild.cmake                builds battery_switch_app.uf2 (application only)
 dev/                          development-only config overlays (see Testing on a Mac)
 tools/                        BLE test client, SRP-to-mDNS bridge, Thread dataset provisioning
 ```
@@ -325,7 +363,7 @@ accepted 654 KB. So the flash layout keeps the factory data directly behind a
 about 620 KB and flashes over serial DFU:
 
 ```sh
-adafruit-nrfutil dfu genpkg --dev-type 0x0052 --application build/battery_switch.hex pkg.zip
+adafruit-nrfutil dfu genpkg --dev-type 0x0052 --application build/devices/<serial>/<serial>.hex pkg.zip
 ```
 
 Serial DFU needs the bootloader's serial mode, which only the 1200-baud touch
@@ -486,7 +524,7 @@ west build -b xiao_ble/nrf52840 --sysbuild -d $WORK/build-dev $REPO -- \
 To flash it, double-press reset, then copy it to the drive **with `cp -X`**:
 
 ```sh
-cp -X $WORK/build-dev/battery_switch.uf2 /Volumes/XIAO-BOOT/
+cp -X $WORK/build-dev/battery_switch_app.uf2 /Volumes/XIAO-BOOT/
 ```
 
 A plain `cp` (or Finder) first writes a `._` metadata file, which can hang
@@ -536,6 +574,12 @@ endpoints 1–6.
 
 ## Known limitations
 
+* The device attestation certificate (DAC) is still the Matter SDK's shared
+  development certificate for VID 0xFFF1 / PID 0x8000. It proves nothing about
+  the individual device. Pairing security doesn't depend on it; that comes
+  from the per-device passcode. A product needs its own vendor ID, a PAI from
+  a Matter-approved PAA, and a unique DAC per device. The SDK's factory data
+  generator can create those (`--gen_certs`, with `chip-cert`).
 * To save flash, endpoint 0 has none of the optional diagnostics clusters:
   Thread Network Diagnostics, Software Diagnostics and Diagnostic Logs. General
   Diagnostics, which is mandatory, is still there.
