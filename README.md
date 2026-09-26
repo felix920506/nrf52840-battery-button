@@ -122,16 +122,23 @@ nrfutil sdk-manager toolchain launch --ncs-version v3.4.1 -- \
   west build -b xiao_ble/nrf52840 --sysbuild -d <repo>/build <repo>
 ```
 
-For logs over SEGGER RTT, add `-- -DEXTRA_CONF_FILE=debug.conf` to the build
-command. RTT needs an SWD probe.
+For logs over SEGGER RTT (needs an SWD probe), use the debug overlay. It
+doesn't fit next to the factory data, so build it with the SDK's test
+credentials and the larger development layout:
 
-Resulting image sizes with nRF Connect SDK v3.4.1, out of 784 KB of flash
-available to the application:
+```sh
+west build -b xiao_ble/nrf52840 --sysbuild -d build-debug -- \
+  -DSB_CONFIG_MATTER_FACTORY_DATA_GENERATE=n \
+  "-DEXTRA_CONF_FILE=debug.conf;dev/no-factory-data.conf" \
+  -DEXTRA_DTC_OVERLAY_FILE=dev/large-app.overlay
+```
 
-| Build | Flash | RAM |
-|---|---|---|
-| default (low power) | 569 KB | 159 KB |
-| `debug.conf` | 635 KB | 161 KB |
+Resulting image sizes with nRF Connect SDK v3.4.1:
+
+| Build | Flash | App partition | RAM |
+|---|---|---|---|
+| default (low power) | 561 KB | 608 KB | 159 KB |
+| debug (no factory data, `dev/large-app.overlay`) | 625 KB | 788 KB | 161 KB |
 
 ### Flashing over USB (UF2 bootloader)
 
@@ -147,18 +154,46 @@ debug probe:
 (pairing credentials). The `zephyr.uf2` that Zephyr normally builds isn't
 produced here, because it would lack the factory data.
 
-Flash layout (`boards/xiao_ble.overlay`):
+Flash layout ([`boards/uf2_matter_layout.dtsi`](boards/uf2_matter_layout.dtsi)):
 
 | Address | Contents |
 |---|---|
 | `0x00000–0x26FFF` | MBR + SoftDevice area of the bootloader (not touched) |
-| `0x27000–0xEAFFF` | application (784 KB) |
-| `0xEB000–0xEBFFF` | Matter factory data |
+| `0x27000–0xBEFFF` | application (608 KB) |
+| `0xBF000–0xBFFFF` | Matter factory data |
+| `0xC0000–0xEBFFF` | unused |
 | `0xEC000–0xF3FFF` | settings: Matter fabrics, Thread network, etc. |
 | `0xF4000–0xFFFFF` | UF2 bootloader (not touched) |
 
+The factory data sits directly behind the application, so both together form
+a single image of about 620 KB. The bootloader's serial DFU also accepts that
+(see [Bluetooth LE test build](#bluetooth-le-test-build) for how to use it).
+
 Reflashing the UF2 keeps the settings, so the device stays commissioned. To
 start over, factory reset it (see below).
+
+### Other nRF52840 boards with the UF2 bootloader
+
+The firmware isn't tied to the XIAO. Any nRF52840 board with the Adafruit UF2
+bootloader works: Adafruit Feather nRF52840 and ItsyBitsy, Pro Micro/nice!nano
+style boards, and so on. It flashes by copying the UF2 file, with no probe
+needed. Use the board's Zephyr UF2 target (e.g.
+`adafruit_feather_nrf52840/nrf52840/uf2`, `promicro_nrf52840/nrf52840/uf2`) and
+add an overlay for it in `boards/`, following
+[`boards/xiao_ble.overlay`](boards/xiao_ble.overlay). The overlay needs:
+
+1. **The flash layout.** Boards shipped with SoftDevice S140 v7 start their
+   application at 0x27000, boards with S140 v6 at 0x26000. `INFO_UF2.TXT` on
+   the bootloader drive shows the version.
+   ```dts
+   #define UF2_APP_START 0x26000   /* S140 v6 */
+   #include "uf2_matter_layout.dtsi"
+   ```
+2. **The `switches` node**, listing the board's pins you wire the switches to.
+3. **The `zephyr,user` ADC channel** measuring VDD (copy it as is), and a
+   `status-led` alias if the board has an LED.
+
+The build produces the same combined `battery_switch.uf2`.
 
 ### Flashing with an SWD probe
 
@@ -283,13 +318,20 @@ asserted. Select `CONFIG_APP_USB_BOOTLOADER_MODE_UF2` to get the USB drive
 after the touch instead. The same one-liner also works from Arduino firmware,
 which enters serial-only mode as well.
 
-Serial DFU writes one contiguous image, and on this bootloader that image must
-stay well below the size of the application partition. A Matter build with
-factory data (about 804 KB, from 0x27000 to the end of the factory data) is
-rejected; the application alone (about 650 KB) goes through. So flash Matter
-builds with factory data through the UF2 drive (use `cp -X`, see
-[Testing on a Mac](#testing-on-a-mac)), or build without factory data for
-development.
+Serial DFU writes one contiguous image, from the application start to the
+end of the factory data. The XIAO's bootloader rejected an 804 KB image but
+accepted 654 KB. So the flash layout keeps the factory data directly behind a
+608 KB application partition: the whole Matter image with factory data is
+about 620 KB and flashes over serial DFU:
+
+```sh
+adafruit-nrfutil dfu genpkg --dev-type 0x0052 --application build/battery_switch.hex pkg.zip
+```
+
+Serial DFU needs the bootloader's serial mode, which only the 1200-baud touch
+of a `usb-logging.conf` build enters. A release build has no USB, so use the
+UF2 drive for it (double-press reset, then `cp -X`, see
+[Testing on a Mac](#testing-on-a-mac)).
 
 ### Changing the data model
 
@@ -438,7 +480,7 @@ the USB log. Don't use it outside a test setup.
 west build -b xiao_ble/nrf52840 --sysbuild -d $WORK/build-dev $REPO -- \
   -DSB_CONFIG_MATTER_FACTORY_DATA_GENERATE=n \
   "-DEXTRA_CONF_FILE=usb-logging.conf;dev/no-factory-data.conf;dev/ot-shell.conf" \
-  -DEXTRA_DTC_OVERLAY_FILE=usb-logging.overlay
+  "-DEXTRA_DTC_OVERLAY_FILE=usb-logging.overlay;dev/large-app.overlay"
 ```
 
 To flash it, double-press reset, then copy it to the drive **with `cp -X`**:

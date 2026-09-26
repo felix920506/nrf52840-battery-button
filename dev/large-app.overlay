@@ -1,0 +1,13 @@
+/*
+ * DEVELOPMENT ONLY. For builds that don't fit the 608 KiB application
+ * partition of boards/uf2_matter_layout.dtsi (USB logging, shell, debug), and
+ * that don't use factory data (dev/no-factory-data.conf): drop the factory
+ * data partition and extend the application up to the settings storage.
+ * Keeps the start address the board layout defines.
+ */
+
+/delete-node/ &factory_data_partition;
+
+&code_partition {
+	reg = <UF2_APP_START (0xec000 - UF2_APP_START)>;
+};

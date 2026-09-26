@@ -1,0 +1,45 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Flash layout for nRF52840 boards with the Adafruit UF2 bootloader.
+ *
+ * Define UF2_APP_START before including this file:
+ *   0x27000  boards shipped with SoftDevice S140 v7 (e.g. Seeed XIAO nRF52840)
+ *   0x26000  boards shipped with SoftDevice S140 v6 (e.g. Adafruit Feather
+ *            nRF52840, ItsyBitsy, Pro Micro nRF52840)
+ * The bootloader's INFO_UF2.TXT shows the SoftDevice version.
+ *
+ * The board's UF2 layout (nrf52840_partition_uf2_sdv6/7.dtsi) is kept; only
+ * the application partition is shortened so that the Matter factory data can
+ * sit directly behind it:
+ *
+ *   UF2_APP_START - 0xBEFFF  application (608 KiB with S140 v7)
+ *   0xBF000 - 0xBFFFF        Matter factory data
+ *   0xC0000 - 0xEBFFF        unused
+ *   0xEC000 - 0xF3FFF        settings storage (board layout)
+ *   0xF4000 - 0xFFFFF        UF2 bootloader (board layout)
+ *
+ * Keeping the application and the factory data together makes them one
+ * contiguous image of about 600 KiB, small enough for the bootloader's serial
+ * DFU as well as for the UF2 drive. If the application ever outgrows its
+ * partition, the link fails: move the factory data up (and this comment).
+ */
+
+#ifndef UF2_APP_START
+#error "Define UF2_APP_START (0x26000 or 0x27000) before including uf2_matter_layout.dtsi"
+#endif
+
+#define UF2_FACTORY_DATA_START 0xbf000
+
+&code_partition {
+	reg = <UF2_APP_START (UF2_FACTORY_DATA_START - UF2_APP_START)>;
+};
+
+&flash0 {
+	partitions {
+		factory_data_partition: partition@bf000 {
+			label = "factory-data";
+			reg = <UF2_FACTORY_DATA_START 0x1000>;
+		};
+	};
+};

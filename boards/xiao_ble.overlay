@@ -86,28 +86,9 @@
 	};
 };
 
-/*
- * Keep the board's Adafruit UF2 bootloader layout, and take the Matter factory
- * data partition from the end of the application partition:
- *
- *   0x00000 - 0x26FFF  MBR + SoftDevice area (used by the bootloader)
- *   0x27000 - 0xEAFFF  application          784 KiB
- *   0xEB000 - 0xEBFFF  Matter factory data    4 KiB
- *   0xEC000 - 0xF3FFF  settings storage      32 KiB
- *   0xF4000 - 0xFFFFF  UF2 bootloader        48 KiB
- */
-&code_partition {
-	reg = <0x00027000 0x000c4000>;
-};
-
-&flash0 {
-	partitions {
-		factory_data_partition: partition@eb000 {
-			label = "factory-data";
-			reg = <0x000eb000 0x00001000>;
-		};
-	};
-};
+/* XIAO nRF52840 ships with SoftDevice S140 v7: the application starts at 0x27000. */
+#define UF2_APP_START 0x27000
+#include "uf2_matter_layout.dtsi"
 
 /* Peripherals that are not used; disabling them avoids idle current. */
 &uart0 {
