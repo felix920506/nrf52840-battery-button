@@ -9,6 +9,9 @@
 #
 # Each board builds on its own runner, in parallel: on GitHub's runners the
 # downloads are quick and the compile is what takes time.
+#
+# Pushes and pull requests that only touch documentation don't build. Tag
+# pushes always build: GitHub ignores path filters for tags.
 
 name: Firmware
 
@@ -16,7 +19,12 @@ on:
   push:
     branches: [master]
     tags: ["**"]
+    paths-ignore: &docs
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
   pull_request:
+    paths-ignore: *docs
   workflow_dispatch:
 
 env:
