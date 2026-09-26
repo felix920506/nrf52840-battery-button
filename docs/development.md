@@ -11,18 +11,64 @@ users can install a prebuilt release using the [README Quick start](../README.md
 src/main.c                    event loop, switch type changes, battery timer
 src/core/app_loop.*           ISR-safe event queue
 src/core/switch_input.*       GPIO, debounce, low-power polling of closed rockers
-src/core/switch_gesture.*     press/long/multi-press state machine
-src/core/battery.*            VDD measurement and discharge curves
+src/core/switch_gesture.*     press/long/multi-press state machine (transport independent)
+src/core/battery.*            VDD measurement, per-chemistry discharge curves
 src/core/status_led.*         LED patterns
-src/core/switch_config.*      stored switch types
-src/core/reset_pin.*          factory reset input
-src/core/usb_info.*           serial pairing code and QR code
-src/transport/transport.h     transport interface
-src/transport/matter/         Matter-over-Thread implementation
-src/transport/ble/            Bluetooth LE test transport
+src/core/switch_config.*      stored switch types (settings)
+src/core/reset_pin.*          factory reset pad
+src/core/usb_info.*           USB serial port showing the pairing code and QR code
+src/transport/transport.h     interface to the radio protocol
+src/transport/matter/         Matter over Thread implementation, first-boot pairing code
+src/transport/ble/            Bluetooth LE test transport (GATT server)
+src/third_party/qrcodegen/    QR code encoder (Project Nayuki, MIT)
+src/default_zap/              Matter data model (.zap) and generated code
 boards/                       per-board pins and flash layout
-tools/                        provisioning and test utilities
+dev/                          development-only config overlays (see Testing on macOS)
+tools/                        provisioning with labels, BLE test client, SRP-to-mDNS bridge,
+                              Thread dataset provisioning
+sysbuild.cmake                builds battery_switch_app.uf2 (application only), firmware version
+.github/workflows/            builds the release UF2 files
 ```
+
+## Matter data model
+
+| Endpoint | Device type | Clusters |
+|---|---|---|
+| 0 | Root Node, Power Source | …, Power Source (battery, replaceable) |
+| 1–6 | Generic Switch | Identify, Descriptor (tag list "1"…"6"), Switch, Mode Select ("Switch type") |
+
+Controllers receive these **Switch cluster events**:
+
+| Switch type | Feature map | Events |
+|---|---|---|
+| momentary | MS, MSR, MSL, MSM (`0x1E`) | `InitialPress`, `ShortRelease`, `LongPress`, `LongRelease`, `MultiPressOngoing`, `MultiPressComplete` |
+| latching | MS, MSR, MSM (`0x16`) | per change of position: `InitialPress`, `ShortRelease`; then `MultiPressComplete(n)` |
+
+Momentary sequences follow the Matter spec and the TC-SWTCH-2.4/2.5
+certification tests:
+
+- single press: `InitialPress`, `ShortRelease`, then `MultiPressComplete(1)`
+  after the multi-press window
+- double press: `InitialPress`, `ShortRelease`, `InitialPress`,
+  `MultiPressOngoing(2)`, `ShortRelease`, `MultiPressComplete(2)`
+- hold: `InitialPress`, `LongPress`, then `LongRelease` when released (no
+  `MultiPressComplete`)
+- more presses than `MultiPressMax`: `MultiPressComplete(0)`
+
+`CurrentPosition` follows the switch. The Power Source cluster reports
+`BatVoltage`, `BatPercentRemaining`, `BatChargeLevel` and
+`BatReplacementNeeded`.
+
+The Mode Select cluster on each switch endpoint has modes 0 (momentary) and 2
+(latching). Mode 1 was an earlier type that reported the rocker's position
+(Matter `SwitchLatched`); it no longer exists, and a switch stored with it
+switches to mode 2 on the next boot. Controllers such as Home Assistant can't
+follow a switch that changes to a position-reporting type, and a position is
+rarely what automations need. Changing the type takes effect immediately: it
+changes the electrical handling (the power-saving polling of closed latching
+switches), the Switch cluster feature map and the events. Controllers may keep
+using the old behaviour until they re-read the device; this Matter SDK can't
+flag the change through `ConfigurationVersion` yet.
 
 ## Adding a transport
 
@@ -31,12 +77,13 @@ The core has no Matter dependencies. It emits `struct switch_event`s and
 [`src/transport/transport.h`](../src/transport/transport.h). To add a transport:
 
 1. Implement the interface in a directory such as `src/transport/zigbee/`.
-2. Add a `CONFIG_APP_TRANSPORT_ZIGBEE` choice in `Kconfig` and sources in
-   `CMakeLists.txt`.
-3. Disable `SB_CONFIG_MATTER` in `sysbuild.conf` for that build, for example
-   with a separate sysbuild config selected through `-DSB_CONF_FILE=`.
+2. Add a `config APP_TRANSPORT_ZIGBEE` entry to the existing `APP_TRANSPORT`
+   choice in `Kconfig`, and add its sources in `CMakeLists.txt`.
+3. Turn off `SB_CONFIG_MATTER` in `sysbuild.conf` for that build, for example
+   with a separate `sysbuild_zigbee.conf` selected through `-DSB_CONF_FILE=`.
 
-Switch events map to Zigbee Multistate Input or BLE GATT notifications.
+The switch events map directly to the Zigbee *Multistate Input* cluster, or to
+a BLE GATT notification.
 
 ## Changing the Matter data model
 
@@ -51,9 +98,11 @@ This rewrites `battery_switch.matter` and the generated code under
 
 ## Bluetooth LE test build
 
-The BLE variant replaces Matter with a small GATT server and sends equivalent
-switch events and battery level. It is a convenient way to test switch inputs
-without a Thread network.
+Without a Thread network, the switches can be tested over Bluetooth LE. The
+`ble` build variant replaces Matter with a small GATT server
+([`src/transport/ble/ble_transport.c`](../src/transport/ble/ble_transport.c)).
+It sends the same switch events, using the same IDs as the Matter Switch
+cluster events, and battery level through the Battery Service.
 
 ```sh
 west build -b xiao_ble/nrf52840 --sysbuild -d build-ble -- \
@@ -62,8 +111,48 @@ pip install bleak
 python3 tools/ble_test_client.py
 ```
 
-The client can change the switch type, for example:
+The client can change the switch type too, for example:
 `python3 tools/ble_test_client.py --set-type 2 latching`.
+
+## Serial DFU and the 1200-baud touch
+
+`usb-logging.conf` adds a USB serial log. It also enables
+`CONFIG_APP_USB_BOOTLOADER_RESET`: opening the serial port at 1200 baud and
+closing it with DTR low reboots the board into the bootloader, so you can
+reflash without pressing reset. Which bootloader mode it enters is chosen by
+the `APP_USB_BOOTLOADER_MODE` Kconfig choice:
+
+- `CONFIG_APP_USB_BOOTLOADER_MODE_SERIAL` (default): serial DFU only. More
+  reliable than the USB drive on macOS, which can hang when copying large UF2
+  files.
+- `CONFIG_APP_USB_BOOTLOADER_MODE_UF2`: the UF2 USB drive appears instead.
+
+Reflash a `usb-logging.conf` build over serial DFU like this:
+
+```sh
+python3 -c "import serial,time; s=serial.Serial('/dev/cu.usbmodemXXXX',1200); time.sleep(.3); s.dtr=False; time.sleep(.3); s.close()"
+adafruit-nrfutil dfu genpkg --dev-type 0x0052 --application build-ble/nrf52840-battery-button/zephyr/zephyr.hex pkg.zip
+adafruit-nrfutil dfu serial -pkg pkg.zip -p /dev/cu.usbmodemXXXX -b 115200 --singlebank
+```
+
+`adafruit-nrfutil --touch 1200` doesn't work here, because it leaves DTR
+asserted. The same one-liner also works from Arduino firmware, which enters
+serial-only mode as well.
+
+Serial DFU writes one contiguous image, from the application start to the end
+of the factory data. The XIAO's bootloader rejected an 804 KB image but
+accepted 654 KB. That is why the flash layout keeps the factory data directly
+behind a 608 KB application partition (see the
+[flash layout](building.md#flash-layout)): the whole Matter image with factory
+data is about 620 KB and flashes over serial DFU:
+
+```sh
+adafruit-nrfutil dfu genpkg --dev-type 0x0052 --application build/devices/<serial>/<serial>.hex pkg.zip
+```
+
+Serial DFU needs the bootloader's serial mode, which only the 1200-baud touch
+of a `usb-logging.conf` build enters. A release build has no USB console, so
+use the UF2 drive for it (double-press reset, then `cp -X`).
 
 ## Testing Matter over Thread on macOS
 
@@ -161,8 +250,10 @@ gn gen out/chip-tool --root=examples/chip-tool && ninja -C out/chip-tool chip-to
 
 ### 5. Build development firmware
 
-This test-only image has no factory data and uses public Matter test
-credentials; do not use it outside an isolated test setup.
+This test-only image has no factory data: it uses the Matter SDK test
+credentials (discriminator `3840`, passcode `20202021`), and adds the
+OpenThread shell and the USB log. Do not use it outside an isolated test
+setup.
 
 ```sh
 west build -b xiao_ble/nrf52840 --sysbuild -d $WORK/build-dev $REPO -- \
@@ -202,34 +293,53 @@ $CT powersource read bat-voltage 1 0 $S
 echo "switch subscribe-event-by-id 0xFFFFFFFF 1 60 1 0xFFFF" | $CT interactive start $S
 ```
 
-Press the inputs to observe Switch cluster events on endpoints 1–6. Clean up
-with `$CT pairing unpair 1 $S`, stop `ot-daemon`, and flash normal firmware.
+Press the inputs to observe Switch cluster events (0x01 InitialPress, 0x02
+LongPress, 0x03 ShortRelease, 0x04 LongRelease, 0x05 MultiPressOngoing, 0x06
+MultiPressComplete) on endpoints 1–6.
 
-For development firmware, no factory data is generated; it uses the Matter SDK
-test passcode `20202021`, discriminator `3840`, an OpenThread shell, and USB
-logging. Use it only in an isolated test setup.
+Cleaning up:
+
+- `$CT pairing unpair 1 $S` removes the switch from the test fabric.
+- Stop `ot-daemon`. The test network disappears with it.
+- Flash a normal firmware build to the switch.
 
 ## Power design
 
-- The device is a Thread Sleepy End Device and Matter ICD (LIT capable); it
-  runs as SIT with a 5-second slow poll until a controller registers for
-  check-ins. TX power is 0 dBm.
-- GPIO SENSE level interrupts wake the CPU without idle GPIOTE channels.
-- Closed latching switches are disconnected and sampled for about 10 µs every
-  100 ms rather than drawing continuous pull-up current. This saves power at
-  the cost of up to 100 ms detection latency when opened.
-- Battery voltage is measured hourly on the internal VDD channel. The QSPI
-  flash enters deep power-down; UART, I²C, SPI, PWM, USB, logging, and console
-  are disabled in normal builds.
-- The XIAO regulator and charger circuitry also consume current. Measure the
-  actual board sleep current when estimating battery life.
+- Thread **Sleepy End Device** and Matter **ICD** (LIT capable; it runs as SIT
+  with a 5 s slow poll until a controller registers for check-ins). TX power
+  is 0 dBm.
+- Switch pins wake the CPU through the GPIO SENSE mechanism (level
+  interrupts), not GPIOTE IN channels. SENSE draws no current while idle.
+- A **closed latching switch** would draw about 230 µA through the pull-up
+  indefinitely. Instead, the pin is disconnected and sampled for about 10 µs
+  every 100 ms (`CONFIG_APP_LATCH_POLL_INTERVAL_MS`), which costs roughly
+  1 µA. The trade-off is up to 100 ms of latency when the switch is opened.
+  Momentary buttons draw pull-up current only while held.
+- The battery is measured once per hour on the internal VDD channel, with no
+  divider.
+- The on-board 2 MB QSPI flash is put into deep power-down. UART, I²C, SPI,
+  PWM and USB are disabled, and so are logging and the console, unless you
+  build with `debug.conf` or `usb-logging.conf`.
+- The XIAO's own regulator and charger circuitry sit on the 3V3 rail. Measure
+  the sleep current of your board with a power profiler; it's the real limit
+  on battery life.
 
 ## Known limitations
 
-- The device attestation certificate is a shared Matter SDK development
-  certificate, not a unique production identity. A product needs its own VID,
-  approved PAI, and unique DAC per device.
-- Automatically provisioned devices store the pairing passcode in plaintext
-  so it can be shown over USB. Physical access can expose it.
-- Optional diagnostics clusters are omitted to save flash.
-- OTA/DFU and MCUboot are not enabled.
+- The device attestation certificate (DAC) is the Matter SDK's shared
+  development certificate for VID 0xFFF1 / PID 0x8000. It proves nothing about
+  the individual device. Pairing security doesn't depend on it; that comes
+  from the per-device passcode. A product needs its own vendor ID, a PAI from
+  a Matter-approved PAA, and a unique DAC per device. The SDK's factory data
+  generator can create those (`--gen_certs`, with `chip-cert`).
+- Devices that create their own pairing code store the passcode in plain text
+  in the factory data page, so they can show it over USB. Anyone with
+  physical access can read it (over USB, or with an SWD probe), just as they
+  could read a label. Devices provisioned with `tools/provision_device.py`
+  store only the SPAKE2+ verifier.
+- To save flash, endpoint 0 has none of the optional diagnostics clusters:
+  Thread Network Diagnostics, Software Diagnostics and Diagnostic Logs.
+  General Diagnostics, which is mandatory, is still there.
+- No OTA/DFU and no MCUboot. The goal was a barebones build; enabling
+  `SB_CONFIG_MATTER_OTA` also requires MCUboot and a slot in the external
+  flash.
