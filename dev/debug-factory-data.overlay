@@ -1,0 +1,26 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Development: room for logging (usb-logging.conf) while keeping factory
+ * data. The application grows up to 0xEAFFF and the factory data moves to
+ * the otherwise unused page 0xEB000, right below the settings.
+ *
+ * The larger application overwrites the release factory data page
+ * (0xBF000): back on the release firmware, the device creates a new
+ * pairing code.
+ */
+
+&code_partition {
+	reg = <0x27000 (0xeb000 - 0x27000)>;
+};
+
+/delete-node/ &factory_data_partition;
+
+&flash0 {
+	partitions {
+		factory_data_partition: partition@eb000 {
+			label = "factory-data";
+			reg = <0xeb000 0x1000>;
+		};
+	};
+};

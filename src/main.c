@@ -75,6 +75,20 @@ static void change_switch_type(uint8_t index, uint16_t type)
 	transport_switch_type_changed(index, type, switch_input_is_active(index));
 }
 
+/* A terminal opened the USB serial port. */
+static void show_pairing_info(void)
+{
+#ifdef CONFIG_APP_USB_INFO
+	usb_info_print();
+#else
+	/* Development builds with the USB console (usb-logging.conf) print it there. */
+	struct transport_pairing_info info = { 0 };
+
+	transport_get_pairing_info(&info);
+	printk("Serial number %s, pairing code %s, QR code %s\n", info.serial, info.code, info.qr);
+#endif
+}
+
 static void measure_battery(void)
 {
 	struct battery_state state;
@@ -183,11 +197,9 @@ int main(void)
 		case APP_EVT_FACTORY_RESET_TIMER:
 			reset_pin_process(&evt);
 			break;
-#ifdef CONFIG_APP_USB_INFO
 		case APP_EVT_USB_TERMINAL:
-			usb_info_print();
+			show_pairing_info();
 			break;
-#endif
 		default:
 			break;
 		}

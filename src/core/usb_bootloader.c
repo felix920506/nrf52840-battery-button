@@ -4,7 +4,8 @@
  * Development helper for builds with the USB console (usb-logging.conf):
  * reboot into the Adafruit bootloader when the host opens the USB serial
  * port at 1200 baud and closes it again (the "1200 baud touch" used by the
- * Arduino tools). This allows reflashing without pressing reset:
+ * Arduino tools). This allows reflashing without pressing reset. Opening
+ * the port normally posts APP_EVT_USB_TERMINAL, which logs the pairing code.
  *
  *   adafruit-nrfutil dfu serial --touch 1200 --singlebank -b 115200 \
  *                    -p /dev/cu.usbmodemXXXX -pkg pkg.zip
@@ -17,6 +18,8 @@
 #include <zephyr/kernel.h>
 
 #include <hal/nrf_power.h>
+
+#include "app_loop.h"
 
 #ifdef CONFIG_RAM_POWER_DOWN_LIBRARY
 #include <ram_pwrdn.h>
@@ -36,6 +39,7 @@ static const struct device *const console = DEVICE_DT_GET(DT_CHOSEN(zephyr_conso
 
 static void check_touch(struct k_timer *timer)
 {
+	static uint32_t last_dtr;
 	uint32_t baud = 0;
 	uint32_t dtr = 1;
 
@@ -43,6 +47,11 @@ static void check_touch(struct k_timer *timer)
 	    uart_line_ctrl_get(console, UART_LINE_CTRL_DTR, &dtr)) {
 		return;
 	}
+
+	if (dtr && !last_dtr && baud != 1200) {
+		app_loop_post(APP_EVT_USB_TERMINAL, 0, 0);
+	}
+	last_dtr = dtr;
 
 	if (baud == 1200 && !dtr) {
 #ifdef CONFIG_RAM_POWER_DOWN_LIBRARY
