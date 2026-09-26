@@ -71,10 +71,17 @@ the first time it starts.
      QR code: MT:XXXXXXXXXXXXXXXXXXX
      Pairing code: XXXX-XXX-XXXX
    ```
-4. Add the device in your Matter controller (Home Assistant, Apple Home,
-   Google Home, …) with the QR code or the pairing code. It is a Thread
-   device, so the controller needs a Thread border router. You can do this
-   while it is still on USB power.
+4. Add the device in your Matter controller with the QR code or the pairing
+   code. It is a Thread device, so the controller needs a Thread border
+   router. You can do this while it is still on USB power.
+
+   > [!WARNING]
+   > **Only Home Assistant has been tested.** This is an uncertified Matter
+   > device: it uses the Matter test vendor ID and development certificates.
+   > Not every smart home ecosystem accepts that. Some warn that the
+   > accessory is uncertified and let you add it anyway (in Home Assistant's
+   > app on an iPhone, choose to add it anyway), others refuse it or only
+   > accept it after extra developer setup.
 5. Unplug USB and connect the battery (see [Hardware](#hardware)). The device
    stays paired.
 
@@ -536,9 +543,11 @@ interval, battery measurement interval, and warning/critical thresholds.
   app (Apple Home, Google Home, Home Assistant, …), scan the device's QR code,
   or enter its pairing code: shown on the USB serial port (see
   [Quick start](#quick-start)), or, for devices provisioned with
-  `tools/provision_device.py`, in `build/devices/<serial>/`. It uses the Matter **test** vendor/product ID and
-  development attestation certificates, so controllers show it as an
-  uncertified test device.
+  `tools/provision_device.py`, in `build/devices/<serial>/`. It uses the
+  Matter **test** vendor/product ID and development attestation
+  certificates, so controllers show it as an uncertified test device, and
+  some ecosystems don't accept it at all. Only Home Assistant has been tested
+  (see the warning in the [Quick start](#quick-start)).
 * **Startup:** the blue LED flashes 3 times when the firmware starts
   (`CONFIG_APP_BOOT_FLASHES`, 0 to disable), then stays off.
 * **Identify:** the blue LED blinks.
