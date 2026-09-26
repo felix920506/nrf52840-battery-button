@@ -16,6 +16,19 @@ queue events.
 No build and no tools are needed: every device creates its own pairing code
 the first time it starts.
 
+> [!CAUTION]
+> **macOS: don't copy firmware files to the board with Finder.** Dragging a
+> UF2 file onto the board's USB drive can send Finder into a crash loop that
+> only restarting the Mac ends. Copy it in Terminal instead:
+>
+> ```sh
+> cp -X battery-switch-xiao-nrf52840.uf2 /Volumes/XIAO-BOOT/
+> ```
+>
+> Use your board's file and drive name (`ls /Volumes` shows it). An
+> `Input/output error` at the end of the copy is normal: the board restarts
+> as soon as it has received the file.
+
 1. Download the UF2 file for your board from the
    [latest release](../../releases/latest):
 
@@ -24,16 +37,18 @@ the first time it starts.
    | Seeed XIAO nRF52840, Sense, Plus | `battery-switch-xiao-nrf52840.uf2` | D0–D5 | hold D9 to GND |
    | Adafruit Feather nRF52840 Express, Sense | `battery-switch-feather-nrf52840.uf2` | A0–A5 | hold USER button |
    | Pro Micro nRF52840, nice!nano, SuperMini | `battery-switch-promicro-nrf52840.uf2` | P0.17, P0.20, P0.22, P0.24, P1.00, P0.11 | hold P1.06 to GND |
+   | Nordic nRF52840 Dongle | `battery-switch-nrf52840-dongle.hex` (not UF2, see [below](#flashing-the-nrf52840-dongle)) | pads 0.02, 0.29, 0.31, 1.13, 1.15, 1.10 | hold SW1 |
 
-   Only the XIAO files have been tested on hardware; the others are
+   Only the XIAO file has been tested on hardware; the others are
    build-tested. The pins are listed in the board's overlay in
    [`boards/`](boards/). The Feather and Pro Micro files expect the
    bootloader with SoftDevice S140 v6, the XIAO files S140 v7 (they ship like
    that; `INFO_UF2.TXT` on the bootloader drive shows the version).
 2. Connect the board over USB (no battery connected) and double-press reset.
-   A USB drive appears. Copy the UF2 file onto it (on macOS use `cp -X`, see
-   [Flashing over USB](#flashing-over-usb-uf2-bootloader)). The board
-   restarts with the switch firmware.
+   A USB drive appears. Copy the UF2 file onto it (on macOS in Terminal with
+   `cp -X`, **not with Finder**, see the caution above). The board restarts
+   with the switch firmware; the LED flashes 3 times. For the nRF52840
+   Dongle, see [Flashing the nRF52840 Dongle](#flashing-the-nrf52840-dongle).
 3. Open the board's USB serial port in a terminal:
    * macOS: `screen /dev/cu.usbmodem* 115200` (quit with Ctrl-A, then K)
    * Linux: `screen /dev/ttyACM0 115200`
@@ -76,14 +91,17 @@ to be added again.
 1. Download the UF2 file for your board from the
    [latest release](../../releases/latest), the same file name as for the
    first install. Not `new-pairing-code.uf2`: that one gives the device a
-   new pairing code (the old one stops working for adding it again).
+   new pairing code (see [Getting a new pairing code](#getting-a-new-pairing-code)).
 2. Disconnect the battery, then connect the board over USB.
 3. Double-press reset. On boards without a reset button (Pro Micro,
    nice!nano, SuperMini) short the RST pad to GND twice quickly. The USB
    drive appears.
-4. Copy the UF2 file onto the drive (on macOS with `cp -X`, see
-   [Flashing over USB](#flashing-over-usb-uf2-bootloader)). The board
-   restarts with the new firmware; the LED flashes 3 times.
+4. Copy the UF2 file onto the drive. The board restarts with the new
+   firmware; the LED flashes 3 times.
+
+   > [!CAUTION]
+   > On macOS, copy it in Terminal with `cp -X`, **not with Finder**: Finder
+   > can end up in a crash loop that only restarting the Mac ends.
 5. Unplug USB and reconnect the battery. The device rejoins the Thread
    network by itself; this can take a minute.
 
@@ -91,6 +109,42 @@ Your controller shows the installed firmware version on the device page
 (Home Assistant: *Firmware*): the release tag, or the commit hash for a
 build that isn't a release. The hardware version shows the board the
 firmware was built for.
+
+The nRF52840 Dongle updates the same way, with its own files: see
+[Flashing the nRF52840 Dongle](#flashing-the-nrf52840-dongle).
+
+### Getting a new pairing code
+
+The pairing code never changes on its own: it stays across firmware updates
+and factory resets, and you can always read it again on the USB serial port.
+Replace it if someone else may know it, for example before you give the
+device away.
+
+A new code doesn't remove existing pairings: controllers that already have
+the device keep it. To start over completely, remove the device from your
+controllers (and factory reset it) as well.
+
+1. Download `new-pairing-code.uf2` from the
+   [latest release](../../releases/latest). It works for every UF2 board:
+   it only erases the page that holds the pairing code (`0xBF000`), not the
+   firmware or the settings.
+2. Disconnect the battery, connect the board over USB and double-press
+   reset. The USB drive appears.
+3. Copy `new-pairing-code.uf2` onto the drive (on macOS with `cp -X` in
+   Terminal, not with Finder).
+4. The board restarts and creates a new pairing code; the LED flashes 3
+   times. If the USB drive is still there instead, copy the firmware file for
+   your board (as for an update) as well.
+5. Open the USB serial port as in the [Quick start](#quick-start): it shows
+   the new QR code and pairing code. The old code no longer works.
+
+For the nRF52840 Dongle, flash
+`battery-switch-nrf52840-dongle-new-pairing-code.hex` instead (see
+[Flashing the nRF52840 Dongle](#flashing-the-nrf52840-dongle)): it is the
+firmware with the pairing code page erased.
+
+To make the file yourself: `tools/provision_device.py --build-dir build
+--blank new-pairing-code.uf2`.
 
 ## Hardware
 
@@ -263,10 +317,11 @@ Resulting image sizes with nRF Connect SDK v3.4.1:
 ### Making a release
 
 [`.github/workflows/firmware.yml`](.github/workflows/firmware.yml) builds the
-UF2 files for the XIAO, the Feather nRF52840 and the Pro Micro nRF52840 on
-every push and pull request (downloadable from the run's artifacts). Pushing a
-tag also publishes them, together with `new-pairing-code.uf2`, as a GitHub
-release named after the tag:
+UF2 files for the XIAO, the Feather nRF52840 and the Pro Micro nRF52840, and
+the `.hex`/`.zip` files for the nRF52840 Dongle, on every push and pull
+request (downloadable from the run's artifacts). Each board builds on its own
+runner, in parallel. Pushing a tag also publishes them, together with
+`new-pairing-code.uf2`, as a GitHub release named after the tag:
 
 ```sh
 git tag v1.0.0
@@ -347,9 +402,15 @@ debug probe:
 1. Connect the XIAO over USB. Remove the battery first.
 2. Double-press the reset button. A USB drive appears, named `XIAO-BOOT` or
    `XIAO-SENSE` depending on the bootloader version.
-3. Copy the file to the drive with `cp -X`; on macOS, a plain `cp` or Finder can
-   hang on large files. The XIAO reboots into the firmware once the copy
+3. Copy the file to the drive with `cp -X`; on macOS, a plain `cp` can hang
+   on large files. The XIAO reboots into the firmware once the copy
    finishes.
+
+   > [!CAUTION]
+   > **Never use Finder on macOS for this.** Dragging a UF2 file onto the
+   > drive can send Finder into a crash loop that only restarting the Mac
+   > ends.
+
    * `build/battery_switch_app.uf2` (the release file): first flash and
      firmware updates. It contains only the application and leaves the
      factory data page alone, so a device keeps its pairing code.
@@ -399,6 +460,55 @@ Feather nRF52840 and the Pro Micro nRF52840 are included. An overlay needs:
    the USB serial port).
 
 Build, provision and flash exactly as for the XIAO.
+
+### Flashing the nRF52840 Dongle
+
+The nRF52840 Dongle (PCA10059) is cheap and easy to get, but it has Nordic's
+USB DFU bootloader instead of a UF2 bootloader, so there is no USB drive to
+copy to. The release has two files per image instead:
+`battery-switch-nrf52840-dongle.hex` for nRF Connect Programmer, and the same
+image as `.zip` for `nrfutil`. The dongle build is build-tested only.
+
+**Bootloader mode:** plug the dongle in and press its RESET button, the
+small one that is pushed sideways (not SW1). The red LED fades in and out.
+
+**With nRF Connect Programmer** (in [nRF Connect for
+Desktop](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-Desktop),
+Windows, macOS, Linux):
+
+1. Put the dongle into bootloader mode and select it in Programmer (it shows
+   up as *Open DFU Bootloader*).
+2. *Add file* → `battery-switch-nrf52840-dongle.hex`, then *Write*.
+
+**With nrfutil:**
+
+```sh
+nrfutil install nrf5sdk-tools
+nrfutil nrf5sdk-tools dfu usb-serial -pkg battery-switch-nrf52840-dongle.zip -p /dev/cu.usbmodemXXXX
+```
+
+(`/dev/ttyACM0` on Linux, `COMx` on Windows: the bootloader's serial port.)
+
+Updates work the same way and keep the pairing code, the pairings and the
+settings: the bootloader replaces the application in place and leaves the
+pages above it alone. `battery-switch-nrf52840-dongle-new-pairing-code.hex`
+(or `.zip`) is the same firmware with the pairing code page erased: flash it
+for a new pairing code.
+
+After flashing, the dongle's USB serial port shows the pairing code exactly
+as on the other boards.
+
+**Power:** out of the box the dongle runs from USB 5 V, with the nRF52840 in
+high voltage mode. For 2x AAA or a CR2032 on VDD, change its solder bridges
+for an external supply as described in the nRF52840 Dongle user guide. Until
+then the battery level it reports isn't meaningful (VDD is regulated to
+3.0 V).
+
+Layout ([`boards/nrf52840dongle.overlay`](boards/nrf52840dongle.overlay)):
+application `0x01000–0xBEFFF` (760 KB), factory data `0xBF000`, settings
+`0xD8000–0xDFFFF` directly below the bootloader at `0xE0000`. To build it:
+`west build -b nrf52840dongle/nrf52840 --sysbuild`, then use
+`build/nrf52840-battery-button/zephyr/zephyr.hex`.
 
 ### Flashing with an SWD probe
 
