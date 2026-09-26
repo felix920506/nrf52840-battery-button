@@ -235,6 +235,19 @@ Resulting image sizes with nRF Connect SDK v3.4.1:
 | default (low power, USB pairing info) | 577 KB | 608 KB | 164 KB |
 | debug (no factory data, `dev/large-app.overlay`) | 625 KB | 788 KB | 161 KB |
 
+### Making a release
+
+[`.github/workflows/firmware.yml`](.github/workflows/firmware.yml) builds the
+UF2 files for the XIAO, the Feather nRF52840 and the Pro Micro nRF52840 on
+every push and pull request (downloadable from the run's artifacts). Pushing a
+tag also publishes them, together with `new-pairing-code.uf2`, as a GitHub
+release named after the tag:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
 ### Per-device pairing codes
 
 Every device needs its own Matter setup code. The Matter SDK's test code

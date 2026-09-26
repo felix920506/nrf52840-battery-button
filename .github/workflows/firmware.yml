@@ -2,14 +2,17 @@
 # its own pairing code on first boot, so the same file works for all devices
 # of a board type.
 #
-# Pushing a tag like v1.0.0 publishes the files as a GitHub release.
+# Pushing a tag publishes the files as a GitHub release named after the tag:
+#   git tag v1.0.0 && git push origin v1.0.0
+# Pushes to master and pull requests only build (files under the run's
+# artifacts).
 
 name: Firmware
 
 on:
   push:
     branches: [master]
-    tags: ["v*"]
+    tags: ["**"]
   pull_request:
   workflow_dispatch:
 
@@ -18,20 +21,9 @@ env:
 
 jobs:
   build:
-    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        # One file per board family: the XIAO file also runs on the XIAO
-        # Sense and Plus, the Feather file on the Feather Sense.
-        include:
-          - name: xiao-nrf52840
-            board: xiao_ble/nrf52840
-          - name: feather-nrf52840
-            board: adafruit_feather_nrf52840/nrf52840/uf2
-          - name: promicro-nrf52840
-            board: promicro_nrf52840/nrf52840/uf2
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,40 +61,37 @@ jobs:
           nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
             west update --narrow -o=--depth=1
 
+      # One file per board family: the XIAO file also runs on the XIAO Sense
+      # and Plus, the Feather file on the Feather Sense, the Pro Micro file on
+      # nice!nano and SuperMini boards.
       - name: Build
         working-directory: ws/nrf52840-battery-button
         run: |
-          nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
-            west build -b "${{ matrix.board }}" --sysbuild -d build
           mkdir -p out
-          cp build/battery_switch_app.uf2 "out/battery-switch-${{ matrix.name }}.uf2"
+          build() {
+            nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
+              west build -b "$2" --sysbuild -d "build-$1"
+            cp "build-$1/battery_switch_app.uf2" "out/battery-switch-$1.uf2"
+          }
+          build xiao-nrf52840     xiao_ble/nrf52840
+          build feather-nrf52840  adafruit_feather_nrf52840/nrf52840/uf2
+          build promicro-nrf52840 promicro_nrf52840/nrf52840/uf2
 
-      # Same flash layout on every board, so one file serves all of them.
-      - name: New pairing code UF2
-        if: matrix.name == 'xiao-nrf52840'
-        working-directory: ws/nrf52840-battery-button
-        run: |
+          # Erases the factory data page (same address on every board), so a
+          # device creates a new pairing code.
           nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
-            python3 tools/provision_device.py --build-dir build --blank out/new-pairing-code.uf2
+            python3 tools/provision_device.py --build-dir build-xiao-nrf52840 \
+              --blank out/new-pairing-code.uf2
+          ls -l out
 
       - uses: actions/upload-artifact@v4
         with:
-          name: battery-switch-${{ matrix.name }}
+          name: firmware
           path: ws/nrf52840-battery-button/out/*.uf2
 
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: out
-          merge-multiple: true
-
       - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: ws/nrf52840-battery-button
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
