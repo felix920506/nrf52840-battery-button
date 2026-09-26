@@ -1,0 +1,135 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Nordic nRF52840 Dongle (PCA10059): nrf52840dongle/nrf52840.
+ * Build-tested only.
+ *
+ * The dongle has Nordic's USB DFU bootloader instead of a UF2 bootloader:
+ * flash the .hex (or .zip) file with nRF Connect Programmer or nrfutil, see
+ * the README.
+ *
+ * Switch wiring: every switch goes between its pad and GND. The pads are
+ * labelled with their pin numbers on the dongle.
+ *
+ *   Switch 1 -> 0.02 (P0.02)      Switch 4 -> 1.13 (P1.13)
+ *   Switch 2 -> 0.29 (P0.29)      Switch 5 -> 1.15 (P1.15)
+ *   Switch 3 -> 0.31 (P0.31)      Switch 6 -> 1.10 (P1.10)
+ *
+ * Factory reset: hold the SW1 button (P1.06) for 5 s.
+ *
+ * Battery: out of the box the dongle runs from USB 5 V (nRF52840 high
+ * voltage mode). For 2x AAA or a CR2032 on VDD, change the solder bridges
+ * for an external supply as described in the nRF52840 Dongle user guide.
+ */
+
+/ {
+	/* Shown as the hardware version by Matter controllers. */
+	model = "Nordic nRF52840 Dongle";
+
+	chosen {
+		zephyr,code-partition = &code_partition;
+	};
+
+	aliases {
+		status-led = &led0_green;
+	};
+
+	switches {
+		compatible = "battery-switch,inputs";
+
+		switch_1 {
+			gpios = <&gpio0 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 1 (P0.02)";
+		};
+
+		switch_2 {
+			gpios = <&gpio0 29 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 2 (P0.29)";
+		};
+
+		switch_3 {
+			gpios = <&gpio0 31 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 3 (P0.31)";
+		};
+
+		switch_4 {
+			gpios = <&gpio1 13 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 4 (P1.13)";
+		};
+
+		switch_5 {
+			gpios = <&gpio1 15 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 5 (P1.15)";
+		};
+
+		switch_6 {
+			gpios = <&gpio1 10 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "Switch 6 (P1.10)";
+		};
+	};
+
+	zephyr,user {
+		/* SW1 button on the dongle. */
+		factory-reset-gpios = <&gpio1 6 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+	};
+};
+
+/*
+ * Flash layout for the dongle's Nordic bootloader (no MCUboot):
+ *
+ *   0x00000 - 0x00FFF  MBR
+ *   0x01000 - 0xBEFFF  application (760 KiB)
+ *   0xBF000 - 0xBFFFF  Matter factory data (same address as on UF2 boards)
+ *   0xC0000 - 0xD7FFF  unused
+ *   0xD8000 - 0xDFFFF  settings, directly below the bootloader
+ *   0xE0000 - 0xFFFFF  Nordic USB bootloader and its settings
+ *
+ * The bootloader updates the application in place (it is too large for the
+ * bootloader's dual-bank mode), so the factory data and settings survive
+ * firmware updates.
+ */
+/delete-node/ &boot_partition;
+/delete-node/ &slot0_partition;
+/delete-node/ &slot1_partition;
+/delete-node/ &storage_partition;
+
+&flash0 {
+	partitions {
+		code_partition: partition@1000 {
+			compatible = "zephyr,mapped-partition";
+			label = "code";
+			reg = <0x00001000 0x000be000>;
+		};
+
+		factory_data_partition: partition@bf000 {
+			compatible = "zephyr,mapped-partition";
+			label = "factory-data";
+			reg = <0x000bf000 0x00001000>;
+		};
+
+		storage_partition: partition@d8000 {
+			compatible = "zephyr,mapped-partition";
+			label = "storage";
+			reg = <0x000d8000 0x00008000>;
+		};
+	};
+};
+
+/* Peripherals that are not used; disabling them avoids idle current. */
+&uart0 {
+	status = "disabled";
+};
+
+&i2c0 {
+	status = "disabled";
+};
+
+&spi1 {
+	status = "disabled";
+};
+
+&pwm0 {
+	status = "disabled";
+};
+
+#include "battery_switch_common.dtsi"

@@ -39,6 +39,11 @@ jobs:
             board: adafruit_feather_nrf52840/nrf52840/uf2
           - name: promicro-nrf52840
             board: promicro_nrf52840/nrf52840/uf2
+          # No UF2 bootloader: .hex for nRF Connect Programmer, .zip for
+          # nrfutil (Nordic USB DFU bootloader).
+          - name: nrf52840-dongle
+            board: nrf52840dongle/nrf52840
+            dfu: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -85,10 +90,29 @@ jobs:
           nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
             west build -b "${{ matrix.board }}" --sysbuild -d build
           mkdir -p out
-          cp build/battery_switch_app.uf2 "out/battery-switch-${{ matrix.name }}.uf2"
+          if [ "${{ matrix.dfu }}" != "true" ]; then
+            cp build/battery_switch_app.uf2 "out/battery-switch-${{ matrix.name }}.uf2"
+          fi
+
+      - name: DFU packages
+        if: matrix.dfu
+        working-directory: ws/nrf52840-battery-button
+        run: |
+          nrfutil install nrf5sdk-tools
+          app=build/nrf52840-battery-button/zephyr/zephyr.hex
+          # Same image with the factory data page erased: a new pairing code.
+          nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
+            python3 tools/provision_device.py --build-dir build --blank-hex new-code.hex
+          package() {
+            cp "$1" "out/$2.hex"
+            nrfutil nrf5sdk-tools pkg generate --hw-version 52 --sd-req=0x00 \
+              --application "$1" --application-version 1 "out/$2.zip"
+          }
+          package "$app" "battery-switch-${{ matrix.name }}"
+          package new-code.hex "battery-switch-${{ matrix.name }}-new-pairing-code"
 
       # Erases the factory data page, so a device creates a new pairing code.
-      # Same address on every board, so one file serves all of them.
+      # Same address on every UF2 board, so one file serves all of them.
       - name: New pairing code UF2
         if: matrix.name == 'xiao-nrf52840'
         working-directory: ws/nrf52840-battery-button
@@ -99,7 +123,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: battery-switch-${{ matrix.name }}
-          path: ws/nrf52840-battery-button/out/*.uf2
+          path: ws/nrf52840-battery-button/out/*
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -117,5 +141,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" out/*.uf2 --repo "$GITHUB_REPOSITORY" \
+          gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" --generate-notes

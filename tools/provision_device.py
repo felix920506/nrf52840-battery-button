@@ -26,6 +26,9 @@ its credentials, pass its directory: --from-device build/devices/<serial>.
 Devices running the generic firmware create their own credentials at first
 boot when the factory data page is empty. --blank OUT.uf2 writes a UF2 file
 that erases the page, to make such a device create a new pairing code.
+--blank-hex OUT.hex does the same for bootloaders that only take a complete
+application image (nRF52840 Dongle): this build's application plus the erased
+page, to package with nrfutil.
 
 Output, per device, in <build-dir>/devices/<serial>/:
     <serial>.uf2           application + factory data, copy to the UF2 drive
@@ -189,6 +192,9 @@ def main():
                         help="write a UF2 file that erases the factory data page instead; a device "
                              "running the generic firmware then creates a new pairing code at its "
                              "next start")
+    parser.add_argument("--blank-hex", metavar="HEX",
+                        help="like --blank, but as a hex file with this build's application "
+                             "included (for the nRF52840 Dongle's DFU bootloader)")
     parser.add_argument("--from-device", action="append", default=[], metavar="DIR",
                         help="rebuild the image of an already provisioned device (its directory "
                              "from an earlier run) with this build's application, same credentials")
@@ -205,11 +211,19 @@ def main():
     fd_offset, fd_size = factory_partition(app_dir)
     app_hex = os.path.join(app_dir, "zephyr", "zephyr.hex")
 
-    if args.blank:
+    if args.blank or args.blank_hex:
         blank = IntelHex()
         blank.frombytes(b"\xff" * fd_size, offset=fd_offset)
-        write_uf2(blank, args.blank)
-        print(f"{args.blank}: erases the factory data page at {hex(fd_offset)}")
+        if args.blank:
+            write_uf2(blank, args.blank)
+            print(f"{args.blank}: erases the factory data page at {hex(fd_offset)}")
+        if args.blank_hex:
+            image = IntelHex(app_hex)
+            if image.maxaddr() >= fd_offset:
+                raise SystemExit("Application overlaps the factory data partition")
+            image.merge(blank, overlap="error")
+            image.write_hex_file(args.blank_hex)
+            print(f"{args.blank_hex}: application + erased factory data page at {hex(fd_offset)}")
         return 0
 
     if args.from_device:
