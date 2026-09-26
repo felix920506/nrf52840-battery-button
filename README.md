@@ -11,6 +11,61 @@ Zephyr, so the RTOS can't be avoided. The application itself is kept small: one
 event loop in the main thread, no extra threads, and interrupts that only
 queue events.
 
+## Quick start
+
+No build and no tools are needed: every device creates its own pairing code
+the first time it starts.
+
+1. Download the UF2 file for your board from the
+   [latest release](../../releases/latest):
+
+   | Board | File | Switches | Factory reset |
+   |---|---|---|---|
+   | Seeed XIAO nRF52840, Sense, Plus | `battery-switch-xiao-nrf52840.uf2` | D0–D5 | hold D9 to GND |
+   | Adafruit Feather nRF52840 Express, Sense | `battery-switch-feather-nrf52840.uf2` | A0–A5 | hold USER button |
+   | Pro Micro nRF52840, nice!nano, SuperMini | `battery-switch-promicro-nrf52840.uf2` | P0.17, P0.20, P0.22, P0.24, P1.00, P0.11 | hold P1.06 to GND |
+
+   Only the XIAO files have been tested on hardware; the others are
+   build-tested. The pins are listed in the board's overlay in
+   [`boards/`](boards/). The Feather and Pro Micro files expect the
+   bootloader with SoftDevice S140 v6, the XIAO files S140 v7 (they ship like
+   that; `INFO_UF2.TXT` on the bootloader drive shows the version).
+2. Connect the board over USB (no battery connected) and double-press reset.
+   A USB drive appears. Copy the UF2 file onto it (on macOS use `cp -X`, see
+   [Flashing over USB](#flashing-over-usb-uf2-bootloader)). The board
+   restarts with the switch firmware.
+3. Open the board's USB serial port in a terminal:
+   * macOS: `screen /dev/cu.usbmodem* 115200` (quit with Ctrl-A, then K)
+   * Linux: `screen /dev/ttyACM0 115200`
+   * Windows: PuTTY or the Arduino serial monitor on the board's COM port
+
+   It prints the pairing QR code and the pairing code (close and reopen the
+   port to print them again):
+   ```
+   Battery Switch
+   Serial number: 5E1D0A6B21C8F4E7
+   Status: not paired yet
+
+   Scan this QR code in your smart home app, or enter the code below.
+
+     ▄▄▄▄▄▄▄ ▄  ▄▄ ▄▄▄▄▄▄▄
+     ...
+
+     QR code: MT:Y.K90AFN00KA0648G00
+     Pairing code: 3497-011-2332
+   ```
+4. Add the device in your Matter controller (Home Assistant, Apple Home,
+   Google Home, …) with the QR code or the pairing code. It is a Thread
+   device, so the controller needs a Thread border router. You can do this
+   while it is still on USB power.
+5. Unplug USB and connect the battery (see [Hardware](#hardware)). The device
+   stays paired.
+
+The pairing code is kept across firmware updates and factory resets. Keep it
+private: while the device is not paired, anyone in Bluetooth range who knows
+it can add the device. Anyone with physical USB access to the device can
+read it.
+
 ## Hardware
 
 ```
@@ -146,7 +201,7 @@ certification tests:
 Set up the workspace. This fetches nRF Connect SDK v3.4.1 next to this repo:
 
 ```sh
-west init -m <this repo url> --mr main battery-switch-ws
+west init -m <this repo url> --mr master battery-switch-ws
 cd battery-switch-ws && west update
 cd nrf52840-battery-button
 west build -b xiao_ble/nrf52840 --sysbuild
@@ -176,15 +231,36 @@ Resulting image sizes with nRF Connect SDK v3.4.1:
 
 | Build | Flash | App partition | RAM |
 |---|---|---|---|
-| default (low power) | 561 KB | 608 KB | 159 KB |
+| default (low power, USB pairing info) | 577 KB | 608 KB | 164 KB |
 | debug (no factory data, `dev/large-app.overlay`) | 625 KB | 788 KB | 161 KB |
 
 ### Per-device pairing codes
 
 Every device needs its own Matter setup code. The Matter SDK's test code
 (passcode `20202021`) is public: anyone in BLE range could commission a device
-using it while its commissioning window is open. So the build doesn't generate
-any pairing credentials. Instead,
+using it while its commissioning window is open. So the build doesn't contain
+any pairing credentials. They live in the Matter factory data page
+(`0xBF000`), which firmware updates don't touch, and get there in one of two
+ways.
+
+**Automatically, on first boot** (the default, used by the release files).
+When the factory data page is empty,
+[`src/transport/matter/self_provision.cpp`](src/transport/matter/self_provision.cpp)
+creates it before Matter starts:
+
+* a random setup passcode (hardware RNG, from the whole valid range, skipping
+  the values the specification forbids),
+* a random discriminator and SPAKE2+ salt, and the SPAKE2+ verifier,
+* the chip's factory-programmed device ID as serial number.
+
+The result has the same format as the SDK's factory data generator produces,
+so from then on the device behaves exactly like a provisioned one. The
+passcode is stored too, so the device can show its code on the USB serial
+port ([`src/core/usb_info.c`](src/core/usb_info.c)): when a terminal opens
+the port, it prints the QR code and the pairing code. USB is only switched on
+while USB power is present, so this costs nothing on battery.
+
+**With printed labels,** for a batch of devices:
 [`tools/provision_device.py`](tools/provision_device.py) creates a firmware
 image per device. For each device it picks:
 
@@ -196,7 +272,7 @@ image per device. For each device it picks:
 
 It writes them into that device's factory data. Only the SPAKE2+ verifier is
 stored on the device, never the passcode, so the code can't be read back from
-the chip.
+the chip; the USB serial port then refers to the label.
 
 ```sh
 nrfutil sdk-manager toolchain launch --ncs-version v3.4.1 -- \
@@ -235,10 +311,11 @@ debug probe:
 3. Copy the file to the drive with `cp -X`; on macOS, a plain `cp` or Finder can
    hang on large files. The XIAO reboots into the firmware once the copy
    finishes.
-   * **First flash:** the device's own `build/devices/<serial>/<serial>.uf2`.
-   * **Firmware update:** `build/battery_switch_app.uf2`. It contains only the
-     application and leaves the factory data page alone, so the device keeps
-     its pairing code.
+   * `build/battery_switch_app.uf2` (the release file): first flash and
+     firmware updates. It contains only the application and leaves the
+     factory data page alone, so a device keeps its pairing code.
+   * Or, for a device with a printed label: its own
+     `build/devices/<serial>/<serial>.uf2` for the first flash.
 
 Flash layout ([`boards/uf2_matter_layout.dtsi`](boards/uf2_matter_layout.dtsi)):
 
@@ -266,7 +343,8 @@ style boards, and so on. It flashes by copying the UF2 file, with no probe
 needed. Use the board's Zephyr UF2 target (e.g.
 `adafruit_feather_nrf52840/nrf52840/uf2`, `promicro_nrf52840/nrf52840/uf2`) and
 add an overlay for it in `boards/`, following
-[`boards/xiao_ble.overlay`](boards/xiao_ble.overlay). The overlay needs:
+[`boards/xiao_ble.overlay`](boards/xiao_ble.overlay). Overlays for the
+Feather nRF52840 and the Pro Micro nRF52840 are included. An overlay needs:
 
 1. **The flash layout.** Boards shipped with SoftDevice S140 v7 start their
    application at 0x27000, boards with S140 v6 at 0x26000. `INFO_UF2.TXT` on
@@ -276,8 +354,10 @@ add an overlay for it in `boards/`, following
    #include "uf2_matter_layout.dtsi"
    ```
 2. **The `switches` node**, listing the board's pins you wire the switches to.
-3. **The `zephyr,user` ADC channel** measuring VDD (copy it as is), and a
-   `status-led` alias if the board has an LED.
+3. **The factory reset pad** (`factory-reset-gpios` in `zephyr,user`), a
+   `status-led` alias if the board has an LED, and
+   `#include "battery_switch_common.dtsi"` at the end (battery measurement and
+   the USB serial port).
 
 Build, provision and flash exactly as for the XIAO.
 
@@ -306,9 +386,10 @@ interval, battery measurement interval, and warning/critical thresholds.
 * **Commissioning:** after the first boot the device advertises over BLE for 15
   minutes, and the blue LED blinks briefly every 2 s. Pressing any switch
   restarts advertising while the device isn't commissioned. In the controller
-  app (Apple Home, Google Home, Home Assistant, …), scan the device's QR code
-  from `build/devices/<serial>/<serial>.png`, or enter the manual code from
-  `<serial>.txt`. It uses the Matter **test** vendor/product ID and
+  app (Apple Home, Google Home, Home Assistant, …), scan the device's QR code,
+  or enter its pairing code: shown on the USB serial port (see
+  [Quick start](#quick-start)), or, for devices provisioned with
+  `tools/provision_device.py`, in `build/devices/<serial>/`. It uses the Matter **test** vendor/product ID and
   development attestation certificates, so controllers show it as an
   uncertified test device.
 * **Identify:** the blue LED blinks.
@@ -351,12 +432,17 @@ src/core/battery.*            VDD measurement, per-chemistry discharge curves
 src/core/status_led.*         LED patterns
 src/core/switch_config.*      stored switch types (settings)
 src/core/reset_pin.*          factory reset pad
+src/core/usb_info.*           USB serial port showing the pairing code and QR code
 src/transport/transport.h     interface to the radio protocol
-src/transport/matter/         Matter over Thread implementation
+src/transport/matter/         Matter over Thread implementation, first-boot pairing code
+src/third_party/qrcodegen/    QR code encoder (Project Nayuki, MIT)
+boards/                       per-board pins and flash layout
+.github/workflows/            builds the release UF2 files
 src/default_zap/              Matter data model (.zap) and generated code
 sysbuild.cmake                builds battery_switch_app.uf2 (application only)
 dev/                          development-only config overlays (see Testing on a Mac)
-tools/                        BLE test client, SRP-to-mDNS bridge, Thread dataset provisioning
+tools/                        provisioning with labels, BLE test client, SRP-to-mDNS bridge,
+                              Thread dataset provisioning
 ```
 
 ### Adding Zigbee or BLE later
@@ -387,12 +473,12 @@ can be changed over BLE too:
 
 ```sh
 west build -b xiao_ble/nrf52840 --sysbuild -d build-ble -- -DFILE_SUFFIX=ble \
-  -DEXTRA_CONF_FILE=usb-logging.conf -DEXTRA_DTC_OVERLAY_FILE=usb-logging.overlay
+  -DEXTRA_CONF_FILE=usb-logging.conf
 pip install bleak
 python3 tools/ble_test_client.py
 ```
 
-`usb-logging.conf` and `usb-logging.overlay` add a USB serial log. They also
+`usb-logging.conf` adds a USB serial log. It also
 reboot the board into the bootloader when the serial port is opened at
 1200 baud and closed with DTR low, so you can reflash without pressing reset.
 By default the bootloader then starts in serial-DFU mode
@@ -572,7 +658,7 @@ the USB log. Don't use it outside a test setup.
 west build -b xiao_ble/nrf52840 --sysbuild -d $WORK/build-dev $REPO -- \
   -DSB_CONFIG_MATTER_FACTORY_DATA_GENERATE=n \
   "-DEXTRA_CONF_FILE=usb-logging.conf;dev/no-factory-data.conf;dev/ot-shell.conf" \
-  "-DEXTRA_DTC_OVERLAY_FILE=usb-logging.overlay;dev/large-app.overlay"
+  -DEXTRA_DTC_OVERLAY_FILE=dev/large-app.overlay
 ```
 
 To flash it, double-press reset, then copy it to the drive **with `cp -X`**:
@@ -634,6 +720,13 @@ endpoints 1–6.
   from the per-device passcode. A product needs its own vendor ID, a PAI from
   a Matter-approved PAA, and a unique DAC per device. The SDK's factory data
   generator can create those (`--gen_certs`, with `chip-cert`).
+* Devices that create their own pairing code store the passcode in plain text
+  in the factory data page, so they can show it over USB. Anyone with
+  physical access can read it (over USB, or with an SWD probe), just as they
+  could read a label. To get a new code, copy `new-pairing-code.uf2` from the
+  release (or `tools/provision_device.py --blank`) to the bootloader drive: it
+  erases the page, and the device creates a new code when it restarts.
+  Pairings with controllers stay.
 * To save flash, endpoint 0 has none of the optional diagnostics clusters:
   Thread Network Diagnostics, Software Diagnostics and Diagnostic Logs. General
   Diagnostics, which is mandatory, is still there.
