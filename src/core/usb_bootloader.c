@@ -18,6 +18,10 @@
 
 #include <hal/nrf_power.h>
 
+#ifdef CONFIG_RAM_POWER_DOWN_LIBRARY
+#include <ram_pwrdn.h>
+#endif
+
 /* GPREGRET values understood by the Adafruit nRF52 bootloader. */
 #define DFU_MAGIC_SERIAL_ONLY_RESET 0x4e
 #define DFU_MAGIC_UF2_RESET         0x57
@@ -41,6 +45,15 @@ static void check_touch(struct k_timer *timer)
 	}
 
 	if (baud == 1200 && !dtr) {
+#ifdef CONFIG_RAM_POWER_DOWN_LIBRARY
+		/*
+		 * RAM sections powered down by the application stay off across a
+		 * soft reset. The bootloader's DFU mode needs them (USB and DFU
+		 * buffers) and hangs otherwise, dropping off USB until a power
+		 * cycle.
+		 */
+		power_up_unused_ram();
+#endif
 		nrf_power_gpregret_set(NRF_POWER, 0, DFU_MAGIC);
 		NVIC_SystemReset();
 	}
