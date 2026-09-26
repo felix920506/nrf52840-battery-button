@@ -43,16 +43,17 @@ the first time it starts.
    port to print them again):
    ```
    Battery Switch
-   Serial number: 5E1D0A6B21C8F4E7
+   Serial number: 1145D7F7118F8DDB
    Status: not paired yet
 
    Scan this QR code in your smart home app, or enter the code below.
 
-     ▄▄▄▄▄▄▄ ▄  ▄▄ ▄▄▄▄▄▄▄
-     ...
+       █▀▀▀▀▀█  ▄▀ ▀ █▀▀▀▀▀█
+       █ ███ █ ▀▄▀█▄ █ ███ █
+       ...
 
-     QR code: MT:Y.K90AFN00KA0648G00
-     Pairing code: 3497-011-2332
+     QR code: MT:XXXXXXXXXXXXXXXXXXX
+     Pairing code: XXXX-XXX-XXXX
    ```
 4. Add the device in your Matter controller (Home Assistant, Apple Home,
    Google Home, …) with the QR code or the pairing code. It is a Thread
