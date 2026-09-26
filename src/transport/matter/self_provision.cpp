@@ -21,6 +21,10 @@
  * UF2 or a factory reset keeps the pairing code. Devices provisioned with
  * tools/provision_device.py already have factory data and are not touched.
  *
+ * Invalid contents (e.g. a write interrupted by a power loss, or an image
+ * that overlapped the page) are replaced as well: Matter can't start with
+ * them, so the device would otherwise be dead.
+ *
  * Device attestation uses the Matter development certificates for the test
  * vendor ID (same as tools/provision_device.py).
  */
@@ -33,6 +37,7 @@
 #include <lib/support/CHIPMem.h>
 #include <lib/support/CodeUtils.h>
 #include <platform/CHIPDeviceConfig.h>
+#include <platform/nrfconnect/FactoryDataParser.h>
 #include <setup_payload/SetupPayload.h>
 #include <system/SystemError.h>
 
@@ -152,15 +157,21 @@ CHIP_ERROR SelfProvisionFactoryData()
 
 	VerifyOrReturnError(ret == 0, System::MapErrorZephyr(ret));
 
-	/* The factory data partition is memory mapped; a quick look is enough. */
-	const uint8_t *existing = reinterpret_cast<const uint8_t *>(PARTITION_ADDRESS(FACTORY_DATA_PARTITION));
+	/* The factory data partition is memory mapped. */
+	uint8_t *existing = reinterpret_cast<uint8_t *>(PARTITION_ADDRESS(FACTORY_DATA_PARTITION));
 
 	if (!PartitionIsEmpty(existing, 16)) {
-		flash_area_close(fa);
-		return CHIP_NO_ERROR;
+		struct FactoryData parsed;
+
+		if (ParseFactoryData(existing, fa->fa_size, &parsed) &&
+		    parsed.version == CONFIG_CHIP_FACTORY_DATA_VERSION) {
+			flash_area_close(fa);
+			return CHIP_NO_ERROR;
+		}
+		LOG_WRN("Invalid factory data, replacing it");
 	}
 
-	LOG_INF("No factory data, creating this device's pairing credentials");
+	LOG_INF("Creating this device's pairing credentials");
 
 	uint8_t *buf = static_cast<uint8_t *>(Platform::MemoryAlloc(kFactoryDataMaxLength));
 	size_t len = 0;

@@ -420,8 +420,15 @@ void transport_get_pairing_info(struct transport_pairing_info *info)
 	info->provisioned = Server::GetInstance().GetFabricTable().FabricCount() != 0;
 	(void)GetDeviceInstanceInfoProvider()->GetSerialNumber(info->serial, sizeof(info->serial));
 
-	/* Fails if the device doesn't store its passcode (tools/provision_device.py). */
-	if (GetQRCode(qrSpan, flags) != CHIP_NO_ERROR || GetManualPairingCode(manualSpan, flags) != CHIP_NO_ERROR ||
+	/*
+	 * Devices from tools/provision_device.py don't store their passcode.
+	 * Check first: the payload helpers would fall back to the public test
+	 * passcode and show a wrong code.
+	 */
+	uint32_t passcode;
+
+	if (GetCommissionableDataProvider()->GetSetupPasscode(passcode) != CHIP_NO_ERROR || passcode == 0 ||
+	    GetQRCode(qrSpan, flags) != CHIP_NO_ERROR || GetManualPairingCode(manualSpan, flags) != CHIP_NO_ERROR ||
 	    manualSpan.size() != 11) {
 		info->qr[0] = '\0';
 		strncpy(info->hint, "Pairing code: see the label that came with the device.", sizeof(info->hint) - 1);

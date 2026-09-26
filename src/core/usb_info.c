@@ -23,6 +23,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/usb/usbd.h>
 
+#include <hal/nrf_power.h>
+
 LOG_MODULE_REGISTER(usb_info, CONFIG_LOG_DEFAULT_LEVEL);
 
 /* Zephyr project VID with the PID the boards' CDC ACM console uses. */
@@ -161,7 +163,12 @@ int usb_info_init(void)
 	if (!err) {
 		err = usbd_init(&usb_info_usbd);
 	}
-	if (!err && !usbd_can_detect_vbus(&usb_info_usbd)) {
+	/*
+	 * The driver reports VBUS changes only. After a soft reset (e.g. by
+	 * the bootloader after flashing) USB power is already there, so check.
+	 */
+	if (!err && (!usbd_can_detect_vbus(&usb_info_usbd) ||
+		     nrf_power_usbregstatus_vbusdet_get(NRF_POWER))) {
 		err = usbd_enable(&usb_info_usbd);
 	}
 
