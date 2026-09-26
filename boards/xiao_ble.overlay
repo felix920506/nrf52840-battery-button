@@ -19,6 +19,8 @@
  * Delete the nodes of switches that are not connected; their Matter
  * endpoints are then disabled.
  *
+ * Factory reset: hold D9 (P1.14) to GND for 5 s (see zephyr,user below).
+ *
  * Battery: connect + to 3V3 and - to GND (2x AAA or CR2032). The battery
  * voltage is measured internally on the nRF52840 VDD rail.
  */
@@ -66,6 +68,14 @@
 
 	zephyr,user {
 		io-channels = <&adc 0>;
+		/*
+		 * Factory reset pad: D9 (P1.14), on the edge with the power
+		 * pins, two pads away from 3V3. Hold it to GND for 5 s to erase
+		 * the Matter fabrics and Thread network. It is not a switch input,
+		 * so no switch gesture can trigger a reset. Leave it unconnected,
+		 * or wire it to a service button inside the enclosure.
+		 */
+		factory-reset-gpios = <&gpio1 14 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 	};
 };
 

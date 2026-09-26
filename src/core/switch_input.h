@@ -38,6 +38,12 @@ uint8_t switch_input_count(void);
 
 enum switch_type switch_input_get_type(uint8_t index);
 
+/*
+ * Change the type of a switch at runtime. The pin is sampled again and its
+ * state becomes the new debounced state, without reporting a change.
+ */
+void switch_input_set_type(uint8_t index, enum switch_type type);
+
 /* True if the switch stays closed on its own (SWITCH_TYPE_LATCHING*). */
 bool switch_input_is_latching(uint8_t index);
 

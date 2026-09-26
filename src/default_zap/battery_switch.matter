@@ -1745,6 +1745,45 @@ cluster IcdManagement = 70 {
   command StayActiveRequest(StayActiveRequestRequest): StayActiveResponse = 3;
 }
 
+/** Attributes and commands for selecting a mode from a list of supported options. */
+cluster ModeSelect = 80 {
+  revision 2;
+
+  bitmap Feature : bitmap32 {
+    kOnOff = 0x1;
+  }
+
+  struct SemanticTagStruct {
+    vendor_id mfgCode = 0;
+    enum16 value = 1;
+  }
+
+  struct ModeOptionStruct {
+    char_string<64> label = 0;
+    int8u mode = 1;
+    SemanticTagStruct semanticTags[] = 2;
+  }
+
+  readonly attribute char_string<64> description = 0;
+  readonly attribute nullable enum16 standardNamespace = 1;
+  readonly attribute ModeOptionStruct supportedModes[] = 2;
+  readonly attribute int8u currentMode = 3;
+  attribute optional nullable int8u startUpMode = 4;
+  attribute optional nullable int8u onMode = 5;
+  readonly attribute command_id generatedCommandList[] = 65528;
+  readonly attribute command_id acceptedCommandList[] = 65529;
+  readonly attribute attrib_id attributeList[] = 65531;
+  readonly attribute bitmap32 featureMap = 65532;
+  readonly attribute int16u clusterRevision = 65533;
+
+  request struct ChangeToModeRequest {
+    int8u newMode = 0;
+  }
+
+  /** On receipt of this command, if the NewMode field indicates a valid mode transition within the supported list, the server SHALL set the CurrentMode attribute to the NewMode value, otherwise, the server SHALL respond with an INVALID_COMMAND status response. */
+  command ChangeToMode(ChangeToModeRequest): DefaultSuccess = 0;
+}
+
 endpoint 0 {
   device type ma_rootdevice = 22, version 4;
   device type ma_powersource = 17, version 1;
@@ -2027,6 +2066,20 @@ endpoint 1 {
     ram      attribute featureMap default = 30;
     ram      attribute clusterRevision default = 2;
   }
+
+  server cluster ModeSelect {
+    ram      attribute description default = "Switch type";
+    ram      attribute standardNamespace;
+    callback attribute supportedModes;
+    ram      attribute currentMode default = 0;
+    callback attribute generatedCommandList;
+    callback attribute acceptedCommandList;
+    callback attribute attributeList;
+    ram      attribute featureMap default = 0;
+    ram      attribute clusterRevision default = 2;
+
+    handle command ChangeToMode;
+  }
 }
 endpoint 2 {
   device type ma_genericswitch = 15, version 3;
@@ -2074,6 +2127,20 @@ endpoint 2 {
     callback attribute attributeList;
     ram      attribute featureMap default = 30;
     ram      attribute clusterRevision default = 2;
+  }
+
+  server cluster ModeSelect {
+    ram      attribute description default = "Switch type";
+    ram      attribute standardNamespace;
+    callback attribute supportedModes;
+    ram      attribute currentMode default = 0;
+    callback attribute generatedCommandList;
+    callback attribute acceptedCommandList;
+    callback attribute attributeList;
+    ram      attribute featureMap default = 0;
+    ram      attribute clusterRevision default = 2;
+
+    handle command ChangeToMode;
   }
 }
 endpoint 3 {
@@ -2123,6 +2190,20 @@ endpoint 3 {
     ram      attribute featureMap default = 30;
     ram      attribute clusterRevision default = 2;
   }
+
+  server cluster ModeSelect {
+    ram      attribute description default = "Switch type";
+    ram      attribute standardNamespace;
+    callback attribute supportedModes;
+    ram      attribute currentMode default = 0;
+    callback attribute generatedCommandList;
+    callback attribute acceptedCommandList;
+    callback attribute attributeList;
+    ram      attribute featureMap default = 0;
+    ram      attribute clusterRevision default = 2;
+
+    handle command ChangeToMode;
+  }
 }
 endpoint 4 {
   device type ma_genericswitch = 15, version 3;
@@ -2170,6 +2251,20 @@ endpoint 4 {
     callback attribute attributeList;
     ram      attribute featureMap default = 30;
     ram      attribute clusterRevision default = 2;
+  }
+
+  server cluster ModeSelect {
+    ram      attribute description default = "Switch type";
+    ram      attribute standardNamespace;
+    callback attribute supportedModes;
+    ram      attribute currentMode default = 0;
+    callback attribute generatedCommandList;
+    callback attribute acceptedCommandList;
+    callback attribute attributeList;
+    ram      attribute featureMap default = 0;
+    ram      attribute clusterRevision default = 2;
+
+    handle command ChangeToMode;
   }
 }
 endpoint 5 {
@@ -2219,6 +2314,20 @@ endpoint 5 {
     ram      attribute featureMap default = 30;
     ram      attribute clusterRevision default = 2;
   }
+
+  server cluster ModeSelect {
+    ram      attribute description default = "Switch type";
+    ram      attribute standardNamespace;
+    callback attribute supportedModes;
+    ram      attribute currentMode default = 0;
+    callback attribute generatedCommandList;
+    callback attribute acceptedCommandList;
+    callback attribute attributeList;
+    ram      attribute featureMap default = 0;
+    ram      attribute clusterRevision default = 2;
+
+    handle command ChangeToMode;
+  }
 }
 endpoint 6 {
   device type ma_genericswitch = 15, version 3;
@@ -2266,6 +2375,20 @@ endpoint 6 {
     callback attribute attributeList;
     ram      attribute featureMap default = 30;
     ram      attribute clusterRevision default = 2;
+  }
+
+  server cluster ModeSelect {
+    ram      attribute description default = "Switch type";
+    ram      attribute standardNamespace;
+    callback attribute supportedModes;
+    ram      attribute currentMode default = 0;
+    callback attribute generatedCommandList;
+    callback attribute acceptedCommandList;
+    callback attribute attributeList;
+    ram      attribute featureMap default = 0;
+    ram      attribute clusterRevision default = 2;
+
+    handle command ChangeToMode;
   }
 }
 

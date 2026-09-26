@@ -60,6 +60,9 @@ void switch_gesture_init(uint8_t count, switch_event_handler_t handler);
 /* Feed a debounced state change of switch `index`. */
 void switch_gesture_input(uint8_t index, bool active);
 
+/* Abandon any sequence in progress, e.g. when the switch type changes. */
+void switch_gesture_reset(uint8_t index);
+
 /* Handles APP_EVT_GESTURE_TIMER. */
 void switch_gesture_process(const struct app_evt *evt);
 

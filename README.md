@@ -41,9 +41,14 @@ queue events.
   commissioning.
 * Unplug USB when running on battery. Don't connect USB and a battery at the
   same time.
+* **Factory reset pad: D9** (P1.14). Leave it unconnected, or wire a small
+  service button from D9 to GND inside the enclosure. It isn't a switch input,
+  so no switch can trigger a reset by accident.
 
-Switches, pins and switch types are set in
-[`boards/xiao_ble.overlay`](boards/xiao_ble.overlay):
+Switches and pins are set in
+[`boards/xiao_ble.overlay`](boards/xiao_ble.overlay). Each switch also has a
+type. The overlay sets its default, and you can change it later from the smart
+home app (see [Changing the switch type](#changing-the-switch-type)):
 
 ```dts
 switch_3 {
@@ -74,12 +79,37 @@ possible with these switches.
 If you remove a switch node, its Matter endpoint is disabled. Endpoints are
 numbered in node order: the first node is endpoint 1.
 
+### Changing the switch type
+
+Each switch endpoint has a Matter **Mode Select** cluster named "Switch type",
+with three modes:
+
+| Mode | Switch type |
+|---|---|
+| 0 | Momentary (push button) |
+| 1 | Latching (rocker) |
+| 2 | Latching, report changes as presses |
+
+* **Home Assistant** shows it as a dropdown on each switch's device page.
+* **Controllers without Mode Select support** (e.g. Apple Home) don't show it.
+  Change the type from another controller on the same device, or with
+  `chip-tool modeselect change-to-mode <mode> <node-id> <endpoint>`.
+
+The device applies the new type immediately. It changes the electrical handling
+(e.g. the power-saving polling of closed latching switches), the Switch cluster
+feature map and the events. The type is stored in flash and survives reboots,
+firmware updates and factory resets: it describes the wiring, which doesn't
+change when you re-pair. After changing the type, reload the device in the
+controller if it keeps showing the old switch behaviour. In Home Assistant, use
+"Re-interview device". Controllers cache the feature map, and this Matter SDK
+can't flag the change through `ConfigurationVersion` yet.
+
 ## Matter data model
 
 | Endpoint | Device type | Clusters |
 |---|---|---|
 | 0 | Root Node, Power Source | …, Power Source (battery, replaceable) |
-| 1–6 | Generic Switch | Identify, Descriptor (tag list "1"…"6"), Switch |
+| 1–6 | Generic Switch | Identify, Descriptor (tag list "1"…"6"), Switch, Mode Select ("Switch type") |
 
 Controllers receive these **Switch cluster events**:
 
@@ -176,6 +206,14 @@ For each device, `build/devices/<serial>/` then contains:
 are the only way to commission it. If you lose them, provision the device
 again: the new image carries a new code.
 
+To fully reflash an already provisioned device with a newer build (for example
+over serial DFU, which writes the whole image), rebuild its image with the
+same credentials:
+
+```sh
+python3 tools/provision_device.py --build-dir build --from-device build/devices/<serial>
+```
+
 ### Flashing over USB (UF2 bootloader)
 
 The build keeps the XIAO's stock Adafruit UF2 bootloader. You don't need a
@@ -264,9 +302,11 @@ interval, battery measurement interval, and warning/critical thresholds.
   development attestation certificates, so controllers show it as an
   uncertified test device.
 * **Identify:** the blue LED blinks.
-* **Factory reset:**
-  * momentary switch 1: hold it for 10 s
-  * latching switch 1 (either latching type): flip it 10 times within 5 s
+* **Factory reset:** hold the **reset pad D9** to GND for 5 s
+  (`CONFIG_APP_FACTORY_RESET_HOLD_MS`). The LED flashes once when the pad is
+  detected and five times at the reset. This removes all Matter fabrics and the
+  Thread network; switch types and the pairing code stay. The pad is also
+  checked at boot, so it works even if the device keeps restarting.
 
 ## Power design
 
@@ -293,12 +333,14 @@ battery life.
 ## Code layout
 
 ```
-src/main.c                    event loop, factory reset, battery timer
+src/main.c                    event loop, switch type changes, battery timer
 src/core/app_loop.*           ISR-safe event queue
 src/core/switch_input.*       GPIO, debounce, low-power polling of closed rockers
 src/core/switch_gesture.*     press/long/multi-press state machine (transport independent)
 src/core/battery.*            VDD measurement, per-chemistry discharge curves
 src/core/status_led.*         LED patterns
+src/core/switch_config.*      stored switch types (settings)
+src/core/reset_pin.*          factory reset pad
 src/transport/transport.h     interface to the radio protocol
 src/transport/matter/         Matter over Thread implementation
 src/default_zap/              Matter data model (.zap) and generated code
@@ -329,7 +371,9 @@ Without a Thread network, the switches can be tested over Bluetooth LE. The
 `ble` build variant replaces Matter with a small GATT server
 ([`src/transport/ble/ble_transport.c`](src/transport/ble/ble_transport.c)).
 It sends the same switch events, using the same IDs as the Matter Switch
-cluster events, and battery level through the Battery Service:
+cluster events, and battery level through the Battery Service. The switch type
+can be changed over BLE too:
+`python3 tools/ble_test_client.py --set-type 2 latching`.
 
 ```sh
 west build -b xiao_ble/nrf52840 --sysbuild -d build-ble -- -DFILE_SUFFIX=ble \

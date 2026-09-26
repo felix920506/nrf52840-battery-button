@@ -7,6 +7,10 @@
  *   Endpoint 0     Root Node + Power Source (battery)
  *   Endpoint 1..6  Generic Switch: Identify, Descriptor, Switch
  *
+ * Each switch endpoint also has a Mode Select cluster to change the switch
+ * type from the smart home app (e.g. Home Assistant shows it as a dropdown):
+ *   mode 0 momentary, 1 latching, 2 latching-as-press (enum switch_type).
+ *
  * Endpoints without a switch in devicetree are disabled at runtime. The
  * Switch cluster feature map is set per endpoint at runtime:
  *   momentary:         MS | MSR | MSL | MSM  (press/release/long press/multi press)
@@ -19,6 +23,7 @@
 
 #include "transport/transport.h"
 
+#include "core/app_loop.h"
 #include "core/status_led.h"
 
 #include "app/matter_init.h"
@@ -26,10 +31,12 @@
 #include <app-common/zap-generated/attributes/Accessors.h>
 #include <app-common/zap-generated/ids/Clusters.h>
 #include <app/clusters/identify-server/identify-server.h>
+#include <app/clusters/mode-select-server/supported-modes-manager.h>
 #include <app/clusters/switch-server/switch-server.h>
 #include <app/server/Server.h>
 #include <app/util/attribute-storage.h>
 #include <app/util/endpoint-config-api.h>
+#include <app/util/generic-callbacks.h>
 #include <platform/CHIPDeviceLayer.h>
 
 #include <zephyr/logging/log.h>
@@ -116,45 +123,93 @@ SWITCH_IDENTIFY(6);
 
 /* ---- Setup ---- */
 
-void SetupSwitchEndpoints()
+/* ---- Switch type (Mode Select) ---- */
+
+using ModeOption = Clusters::ModeSelect::Structs::ModeOptionStruct::Type;
+
+/* Indexed by enum switch_type; the mode value is the enum value. */
+const ModeOption kSwitchModes[] = {
+	{ CharSpan::fromCharString("Momentary (push button)"), SWITCH_TYPE_MOMENTARY, {} },
+	{ CharSpan::fromCharString("Latching (rocker)"), SWITCH_TYPE_LATCHING, {} },
+	{ CharSpan::fromCharString("Latching, report changes as presses"), SWITCH_TYPE_LATCHING_AS_PRESS, {} },
+};
+
+class SwitchModesManager : public Clusters::ModeSelect::SupportedModesManager {
+public:
+	ModeOptionsProvider getModeOptionsProvider(EndpointId endpoint) const override
+	{
+		if (!IsSwitchEndpoint(endpoint)) {
+			return ModeOptionsProvider();
+		}
+		return ModeOptionsProvider(std::begin(kSwitchModes), std::end(kSwitchModes));
+	}
+
+	Protocols::InteractionModel::Status getModeOptionByMode(EndpointId endpoint, uint8_t mode,
+								const ModeOption **dataPtr) const override
+	{
+		if (!IsSwitchEndpoint(endpoint) || mode >= std::size(kSwitchModes)) {
+			return Protocols::InteractionModel::Status::InvalidCommand;
+		}
+		*dataPtr = &kSwitchModes[mode];
+		return Protocols::InteractionModel::Status::Success;
+	}
+
+	static bool IsSwitchEndpoint(EndpointId endpoint)
+	{
+		return endpoint >= kFirstSwitchEndpoint && endpoint < kFirstSwitchEndpoint + sSwitches.count;
+	}
+};
+
+SwitchModesManager sSwitchModes;
+
+/* Switch cluster attributes for a switch type. Call with the stack locked. */
+void ApplySwitchType(uint8_t index, enum switch_type type, bool active)
 {
 	namespace Attr = Clusters::Switch::Attributes;
 	using Feature = Clusters::Switch::Feature;
 
+	EndpointId ep = SwitchEndpoint(index);
+	uint32_t features;
+	uint8_t position = SWITCH_POSITION_OPEN;
+
+	switch (type) {
+	case SWITCH_TYPE_LATCHING:
+		features = static_cast<uint32_t>(Feature::kLatchingSwitch);
+		position = active ? SWITCH_POSITION_CLOSED : SWITCH_POSITION_OPEN;
+		break;
+	case SWITCH_TYPE_LATCHING_AS_PRESS:
+		/* No long press: the "press" is over as soon as it starts. */
+		features = static_cast<uint32_t>(Feature::kMomentarySwitch) |
+			   static_cast<uint32_t>(Feature::kMomentarySwitchRelease) |
+			   static_cast<uint32_t>(Feature::kMomentarySwitchMultiPress);
+		Attr::MultiPressMax::Set(ep, CONFIG_APP_MULTI_PRESS_MAX);
+		break;
+	case SWITCH_TYPE_MOMENTARY:
+	default:
+		features = static_cast<uint32_t>(Feature::kMomentarySwitch) |
+			   static_cast<uint32_t>(Feature::kMomentarySwitchRelease) |
+			   static_cast<uint32_t>(Feature::kMomentarySwitchLongPress) |
+			   static_cast<uint32_t>(Feature::kMomentarySwitchMultiPress);
+		Attr::MultiPressMax::Set(ep, CONFIG_APP_MULTI_PRESS_MAX);
+		break;
+	}
+
+	Attr::FeatureMap::Set(ep, features);
+	Attr::CurrentPosition::Set(ep, position);
+	Clusters::ModeSelect::Attributes::CurrentMode::Set(ep, static_cast<uint8_t>(type));
+}
+
+void SetupSwitchEndpoints()
+{
 	for (uint8_t i = sSwitches.count; i < SWITCH_INPUT_MAX; i++) {
 		emberAfEndpointEnableDisable(SwitchEndpoint(i), false);
 	}
 
 	for (uint8_t i = 0; i < sSwitches.count; i++) {
 		EndpointId ep = SwitchEndpoint(i);
-		uint32_t features;
-		uint8_t position = SWITCH_POSITION_OPEN;
 
-		switch (sSwitches.type[i]) {
-		case SWITCH_TYPE_LATCHING:
-			features = static_cast<uint32_t>(Feature::kLatchingSwitch);
-			position = sSwitches.active[i] ? SWITCH_POSITION_CLOSED : SWITCH_POSITION_OPEN;
-			break;
-		case SWITCH_TYPE_LATCHING_AS_PRESS:
-			/* No long press: the "press" is over as soon as it starts. */
-			features = static_cast<uint32_t>(Feature::kMomentarySwitch) |
-				   static_cast<uint32_t>(Feature::kMomentarySwitchRelease) |
-				   static_cast<uint32_t>(Feature::kMomentarySwitchMultiPress);
-			Attr::MultiPressMax::Set(ep, CONFIG_APP_MULTI_PRESS_MAX);
-			break;
-		case SWITCH_TYPE_MOMENTARY:
-		default:
-			features = static_cast<uint32_t>(Feature::kMomentarySwitch) |
-				   static_cast<uint32_t>(Feature::kMomentarySwitchRelease) |
-				   static_cast<uint32_t>(Feature::kMomentarySwitchLongPress) |
-				   static_cast<uint32_t>(Feature::kMomentarySwitchMultiPress);
-			Attr::MultiPressMax::Set(ep, CONFIG_APP_MULTI_PRESS_MAX);
-			break;
-		}
-
-		Attr::FeatureMap::Set(ep, features);
-		Attr::NumberOfPositions::Set(ep, 2);
-		Attr::CurrentPosition::Set(ep, position);
+		Clusters::Switch::Attributes::NumberOfPositions::Set(ep, 2);
+		ApplySwitchType(i, sSwitches.type[i], sSwitches.active[i]);
 
 		/* Lets controllers name the endpoints "1", "2", ... instead of six identical switches. */
 		sSwitchTags[i].namespaceID = kNamespaceCommonNumber;
@@ -200,12 +255,31 @@ void MatterEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 
 } /* namespace */
 
+/*
+ * Attribute changes from the data model. A ChangeToMode command from a
+ * controller writes Mode Select CurrentMode; hand the request to the
+ * application loop, which applies and stores the new switch type. Our own
+ * writes of CurrentMode come through here too and are ignored there because
+ * the type doesn't change.
+ */
+void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath &path, uint8_t type, uint16_t size,
+				       uint8_t *value)
+{
+	if (path.mClusterId == Clusters::ModeSelect::Id &&
+	    path.mAttributeId == Clusters::ModeSelect::Attributes::CurrentMode::Id &&
+	    SwitchModesManager::IsSwitchEndpoint(path.mEndpointId) && size == 1) {
+		app_loop_post(APP_EVT_SWITCH_TYPE, path.mEndpointId - kFirstSwitchEndpoint, *value);
+	}
+}
+
 /* ---- Transport API ---- */
 
 int transport_init(const struct transport_switch_config *switches, const struct battery_info *battery)
 {
 	sSwitches = *switches;
 	sBattery = battery;
+
+	Clusters::ModeSelect::setSupportedModesManager(&sSwitchModes);
 
 	Nrf::Matter::InitData initData;
 	initData.mPostServerInitClbk = PostServerInit;
@@ -276,6 +350,18 @@ void transport_switch_event(uint8_t index, const struct switch_event *evt)
 	/* User activity: stay in active mode briefly so acknowledgements arrive quickly. */
 	Server::GetInstance().GetICDManager().OnNetworkActivity();
 #endif
+}
+
+void transport_switch_type_changed(uint8_t index, enum switch_type type, bool active)
+{
+	if (index >= sSwitches.count) {
+		return;
+	}
+
+	StackLock lock;
+
+	sSwitches.type[index] = type;
+	ApplySwitchType(index, type, active);
 }
 
 void transport_battery_update(const struct battery_state *state)

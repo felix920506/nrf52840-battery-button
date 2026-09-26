@@ -15,6 +15,8 @@ target_sources(app PRIVATE
   src/main.c
   src/core/app_loop.c
   src/core/battery.c
+  src/core/reset_pin.c
+  src/core/switch_config.c
   src/core/status_led.c
   src/core/switch_gesture.c
   src/core/switch_input.c

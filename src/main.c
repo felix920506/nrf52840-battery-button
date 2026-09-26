@@ -9,6 +9,8 @@
 
 #include "core/app_loop.h"
 #include "core/battery.h"
+#include "core/reset_pin.h"
+#include "core/switch_config.h"
 #include "core/status_led.h"
 #include "core/switch_gesture.h"
 #include "core/switch_input.h"
@@ -20,75 +22,21 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/pm/device.h>
 
-#include <string.h>
-
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
-
-/* Switch 1 doubles as the factory reset switch. */
-#define RESET_SWITCH 0
 
 static void battery_timer_expiry(struct k_timer *timer)
 {
 	app_loop_post(APP_EVT_BATTERY, 0, 0);
 }
 
-static void factory_reset_timer_expiry(struct k_timer *timer);
-
 static K_TIMER_DEFINE(battery_timer, battery_timer_expiry, NULL);
-static K_TIMER_DEFINE(factory_reset_timer, factory_reset_timer_expiry, NULL);
-static uint16_t factory_reset_generation;
 
-/* Latching switch 1: times of the last CONFIG_APP_FACTORY_RESET_TOGGLES changes. */
-static int64_t toggle_times[CONFIG_APP_FACTORY_RESET_TOGGLES];
-static uint8_t toggle_next;
-
-static void factory_reset_timer_expiry(struct k_timer *timer)
-{
-	app_loop_post(APP_EVT_FACTORY_RESET_TIMER, 0, factory_reset_generation);
-}
-
+/* Called when the reset pad has been held to GND for CONFIG_APP_FACTORY_RESET_HOLD_MS. */
 static void factory_reset(void)
 {
 	LOG_WRN("Factory reset");
 	status_led_flash(5);
 	transport_factory_reset();
-}
-
-/*
- * Momentary switch 1: hold for CONFIG_APP_FACTORY_RESET_HOLD_MS.
- * Latching switch 1 (either latching type): toggle it
- * CONFIG_APP_FACTORY_RESET_TOGGLES times within
- * CONFIG_APP_FACTORY_RESET_TOGGLE_WINDOW_MS.
- */
-static void factory_reset_check(uint8_t index, bool active)
-{
-	if (index != RESET_SWITCH) {
-		return;
-	}
-
-	if (switch_input_is_latching(index)) {
-		int64_t now = k_uptime_get();
-		/* The oldest of the recorded toggles is the one about to be overwritten. */
-		int64_t oldest = toggle_times[toggle_next];
-
-		toggle_times[toggle_next] = now;
-		toggle_next = (toggle_next + 1) % ARRAY_SIZE(toggle_times);
-
-		if (oldest != 0 && now - oldest <= CONFIG_APP_FACTORY_RESET_TOGGLE_WINDOW_MS) {
-			memset(toggle_times, 0, sizeof(toggle_times));
-			factory_reset();
-		}
-		return;
-	}
-
-	/* Stop first so an expiry that races with this carries the old generation. */
-	k_timer_stop(&factory_reset_timer);
-	factory_reset_generation++;
-
-	if (active) {
-		k_timer_start(&factory_reset_timer, K_MSEC(CONFIG_APP_FACTORY_RESET_HOLD_MS),
-			      K_NO_WAIT);
-	}
 }
 
 static void on_switch_event(uint8_t index, const struct switch_event *evt)
@@ -98,14 +46,32 @@ static void on_switch_event(uint8_t index, const struct switch_event *evt)
 
 static void on_input(uint8_t index, bool active)
 {
-	factory_reset_check(index, active);
-
 	/* Any switch activity makes an unprovisioned device discoverable again. */
 	if (!transport_is_provisioned()) {
 		transport_start_pairing();
 	}
 
 	switch_gesture_input(index, active);
+}
+
+/* Change requested through the transport (e.g. the smart home app). */
+static void change_switch_type(uint8_t index, uint16_t type)
+{
+	if (index >= switch_input_count() || type > SWITCH_TYPE_LATCHING_AS_PRESS ||
+	    switch_input_get_type(index) == type) {
+		return;
+	}
+
+	switch_gesture_reset(index);
+	switch_input_set_type(index, type);
+
+	int err = switch_config_save(index, type);
+
+	if (err) {
+		LOG_ERR("Saving switch %u type failed (%d)", index + 1, err);
+	}
+
+	transport_switch_type_changed(index, type, switch_input_is_active(index));
 }
 
 static void measure_battery(void)
@@ -156,6 +122,11 @@ int main(void)
 		return err;
 	}
 
+	err = switch_config_load();
+	if (err) {
+		LOG_WRN("Loading switch types failed (%d), using defaults", err);
+	}
+
 	switches.count = switch_input_count();
 	for (uint8_t i = 0; i < switches.count; i++) {
 		switches.type[i] = switch_input_get_type(i);
@@ -168,6 +139,11 @@ int main(void)
 	if (err) {
 		LOG_ERR("Transport init failed (%d)", err);
 		return err;
+	}
+
+	err = reset_pin_init(factory_reset);
+	if (err) {
+		LOG_WRN("No factory reset pad (%d)", err);
 	}
 
 	measure_battery();
@@ -188,14 +164,15 @@ int main(void)
 		case APP_EVT_GESTURE_TIMER:
 			switch_gesture_process(&evt);
 			break;
+		case APP_EVT_SWITCH_TYPE:
+			change_switch_type(evt.index, evt.arg);
+			break;
 		case APP_EVT_BATTERY:
 			measure_battery();
 			break;
+		case APP_EVT_RESET_PIN:
 		case APP_EVT_FACTORY_RESET_TIMER:
-			if (evt.arg == factory_reset_generation &&
-			    switch_input_is_active(RESET_SWITCH)) {
-				factory_reset();
-			}
+			reset_pin_process(&evt);
 			break;
 		default:
 			break;

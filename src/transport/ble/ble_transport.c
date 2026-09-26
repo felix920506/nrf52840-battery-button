@@ -17,6 +17,10 @@
  *                             [1..n] switch type (0 momentary, 1 latching,
  *                             2 latching-as-press)
  *     Battery Voltage         ...0004  (read, notify): uint16 little endian, mV
+ *     Switch Type             ...0005  (write): [0] switch number 1..6,
+ *                             [1] new type (0 momentary, 1 latching,
+ *                             2 latching-as-press). Stored on the device;
+ *                             Switch Info shows the result.
  *
  * There is no pairing or provisioning; any central can connect. Events that
  * happen while nothing is connected are dropped.
@@ -24,6 +28,7 @@
 
 #include "transport/transport.h"
 
+#include "core/app_loop.h"
 #include "core/status_led.h"
 
 #include <zephyr/bluetooth/bluetooth.h>
@@ -50,6 +55,7 @@ static const struct bt_uuid_128 switch_svc_uuid = BT_UUID_INIT_128(SWITCH_UUID(1
 static const struct bt_uuid_128 switch_event_uuid = BT_UUID_INIT_128(SWITCH_UUID(2));
 static const struct bt_uuid_128 switch_info_uuid = BT_UUID_INIT_128(SWITCH_UUID(3));
 static const struct bt_uuid_128 battery_voltage_uuid = BT_UUID_INIT_128(SWITCH_UUID(4));
+static const struct bt_uuid_128 switch_type_uuid = BT_UUID_INIT_128(SWITCH_UUID(5));
 
 static uint8_t switch_info[1 + SWITCH_INPUT_MAX];
 static uint8_t switch_info_len;
@@ -71,6 +77,23 @@ static ssize_t read_value(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, value, size);
 }
 
+static ssize_t write_switch_type(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf,
+				 uint16_t len, uint16_t offset, uint8_t flags)
+{
+	const uint8_t *req = buf;
+
+	if (offset != 0 || len != 2) {
+		return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+	}
+	if (req[0] < 1 || req[0] > switch_info[0] || req[1] > SWITCH_TYPE_LATCHING_AS_PRESS) {
+		return BT_GATT_ERR(BT_ATT_ERR_VALUE_NOT_ALLOWED);
+	}
+
+	/* Applied by the application loop, which calls transport_switch_type_changed(). */
+	app_loop_post(APP_EVT_SWITCH_TYPE, req[0] - 1, req[1]);
+	return len;
+}
+
 static void ccc_changed(const struct bt_gatt_attr *attr, uint16_t value)
 {
 	LOG_INF("Notifications %s", value == BT_GATT_CCC_NOTIFY ? "enabled" : "disabled");
@@ -86,6 +109,8 @@ BT_GATT_SERVICE_DEFINE(switch_svc,
 	BT_GATT_CHARACTERISTIC(&battery_voltage_uuid.uuid, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 			       BT_GATT_PERM_READ, read_value, NULL, voltage_le),
 	BT_GATT_CCC(ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+	BT_GATT_CHARACTERISTIC(&switch_type_uuid.uuid, BT_GATT_CHRC_WRITE,
+			       BT_GATT_PERM_WRITE, NULL, write_switch_type, NULL),
 );
 
 /* Value attributes within switch_svc.attrs. */
@@ -190,6 +215,14 @@ void transport_switch_event(uint8_t index, const struct switch_event *evt)
 	/* -ENOTCONN / -EINVAL just mean nobody is listening. */
 	(void)bt_gatt_notify(NULL, &switch_svc.attrs[ATTR_SWITCH_EVENT], last_event,
 			     sizeof(last_event));
+}
+
+void transport_switch_type_changed(uint8_t index, enum switch_type type, bool active)
+{
+	if (index + 1 < switch_info_len) {
+		switch_info[1 + index] = type;
+	}
+	LOG_INF("Switch %u: type %u", index + 1, type);
 }
 
 void transport_battery_update(const struct battery_state *state)

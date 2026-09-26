@@ -22,6 +22,7 @@ SWITCH_SERVICE = "5a1d0001-6b8f-4c1e-9a52-0c4f0b8e0a11"
 SWITCH_EVENT = "5a1d0002-6b8f-4c1e-9a52-0c4f0b8e0a11"
 SWITCH_INFO = "5a1d0003-6b8f-4c1e-9a52-0c4f0b8e0a11"
 BATTERY_VOLTAGE = "5a1d0004-6b8f-4c1e-9a52-0c4f0b8e0a11"
+SWITCH_TYPE = "5a1d0005-6b8f-4c1e-9a52-0c4f0b8e0a11"
 BATTERY_LEVEL = "00002a19-0000-1000-8000-00805f9b34fb"
 
 # Same IDs as the Matter Switch cluster events.
@@ -35,6 +36,7 @@ EVENTS = {
     6: "MultiPressComplete",
 }
 TYPES = {0: "momentary", 1: "latching", 2: "latching-as-press"}
+TYPE_IDS = {name: value for value, name in TYPES.items()}
 
 
 def format_event(data: bytes) -> str:
@@ -47,7 +49,7 @@ def format_event(data: bytes) -> str:
     return text
 
 
-async def run(name: str, timeout: float) -> int:
+async def run(name: str, timeout: float, set_type=None) -> int:
     print(f"Scanning for '{name}' ({timeout:.0f} s)...")
     device = await BleakScanner.find_device_by_filter(
         lambda d, adv: d.name == name or SWITCH_SERVICE in adv.service_uuids,
@@ -59,6 +61,12 @@ async def run(name: str, timeout: float) -> int:
 
     print(f"Connecting to {device.name} ({device.address})...")
     async with BleakClient(device) as client:
+        if set_type:
+            number, type_name = set_type
+            await client.write_gatt_char(SWITCH_TYPE, bytes([number, TYPE_IDS[type_name]]), response=True)
+            print(f"Requested switch {number} -> {type_name}")
+            await asyncio.sleep(0.5)
+
         info = await client.read_gatt_char(SWITCH_INFO)
         count = info[0]
         types = ", ".join(f"{i + 1}={TYPES.get(t, t)}" for i, t in enumerate(info[1 : 1 + count]))
@@ -91,9 +99,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--name", default="BatterySwitch")
     parser.add_argument("--timeout", type=float, default=20.0)
+    parser.add_argument("--set-type", nargs=2, metavar=("SWITCH", "TYPE"),
+                        help="change a switch's type first, e.g. --set-type 2 latching "
+                             "(momentary, latching, latching-as-press)")
     args = parser.parse_args()
+    set_type = None
+    if args.set_type:
+        if args.set_type[1] not in TYPE_IDS:
+            parser.error(f"TYPE must be one of: {', '.join(TYPE_IDS)}")
+        set_type = (int(args.set_type[0]), args.set_type[1])
     try:
-        return asyncio.run(run(args.name, args.timeout))
+        return asyncio.run(run(args.name, args.timeout, set_type))
     except KeyboardInterrupt:
         return 0
 

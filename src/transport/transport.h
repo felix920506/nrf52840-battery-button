@@ -11,6 +11,11 @@
  * Kconfig choice entry and add its sources in CMakeLists.txt.
  *
  * All functions are called from the application loop (main thread).
+ *
+ * A transport that lets the user change a switch's type (e.g. from the smart
+ * home app) posts APP_EVT_SWITCH_TYPE with the switch index and the new
+ * enum switch_type; the core applies it, stores it and then calls
+ * transport_switch_type_changed().
  */
 
 #pragma once
@@ -41,6 +46,9 @@ int transport_init(const struct transport_switch_config *switches,
 void transport_switch_event(uint8_t index, const struct switch_event *evt);
 
 void transport_battery_update(const struct battery_state *state);
+
+/* The type of switch `index` changed; `active` is its current state. */
+void transport_switch_type_changed(uint8_t index, enum switch_type type, bool active);
 
 /* True once the device has been added to a network/controller. */
 bool transport_is_provisioned(void);

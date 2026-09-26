@@ -25,7 +25,11 @@ enum app_evt_type {
 	APP_EVT_GESTURE_TIMER,
 	/* Periodic battery measurement. */
 	APP_EVT_BATTERY,
-	/* Factory reset hold time on switch 1 elapsed, `arg` is its generation. */
+	/* Transport: change the type of switch `index` to `arg` (enum switch_type). */
+	APP_EVT_SWITCH_TYPE,
+	/* reset_pin: the factory reset pad changed level. */
+	APP_EVT_RESET_PIN,
+	/* reset_pin: hold time of the reset pad elapsed, `arg` is its generation. */
 	APP_EVT_FACTORY_RESET_TIMER,
 };
 

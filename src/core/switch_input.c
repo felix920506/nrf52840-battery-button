@@ -36,7 +36,8 @@ LOG_MODULE_REGISTER(switch_input, CONFIG_LOG_DEFAULT_LEVEL);
 static const struct gpio_dt_spec specs[] = {
 	DT_FOREACH_CHILD_STATUS_OKAY(SWITCHES_NODE, SWITCH_SPEC)
 };
-static const uint8_t types[] = {
+/* Defaults from devicetree; changeable at runtime with switch_input_set_type(). */
+static uint8_t types[] = {
 	DT_FOREACH_CHILD_STATUS_OKAY(SWITCHES_NODE, SWITCH_TYPE)
 };
 
@@ -267,6 +268,28 @@ int switch_input_init(switch_input_handler_t handler)
 uint8_t switch_input_count(void)
 {
 	return NUM_INPUTS;
+}
+
+void switch_input_set_type(uint8_t index, enum switch_type type)
+{
+	if (index >= NUM_INPUTS || types[index] == type) {
+		return;
+	}
+
+	struct input_state *in = &inputs[index];
+
+	types[index] = type;
+
+	/* Start over from a fresh sample, with the new type's power handling. */
+	k_timer_stop(&in->debounce_timer);
+	in->debouncing = false;
+	gpio_pin_interrupt_configure_dt(&specs[index], GPIO_INT_DISABLE);
+	connect_pin(index);
+	k_busy_wait(CONFIG_APP_LATCH_POLL_SETTLE_US);
+	in->active = read_pin(index);
+	arm(index);
+
+	LOG_INF("%s: now %s", labels[index], type_names[type]);
 }
 
 enum switch_type switch_input_get_type(uint8_t index)

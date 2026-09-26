@@ -187,6 +187,17 @@ void switch_gesture_process(const struct app_evt *evt)
 	on_timer(evt->index, g);
 }
 
+void switch_gesture_reset(uint8_t index)
+{
+	if (index >= gesture_count) {
+		return;
+	}
+
+	timer_stop(&gestures[index]);
+	gestures[index].state = GESTURE_IDLE;
+	gestures[index].count = 0;
+}
+
 void switch_gesture_init(uint8_t count, switch_event_handler_t handler)
 {
 	gesture_count = MIN(count, SWITCH_INPUT_MAX);

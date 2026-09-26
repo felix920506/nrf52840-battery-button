@@ -149,19 +149,14 @@ config APP_STATUS_LED
 	  factory reset feedback. Blinks are short to save power.
 
 config APP_FACTORY_RESET_HOLD_MS
-	int "Momentary switch 1: hold time for factory reset [ms]"
-	default 10000
-	range 3000 60000
-
-config APP_FACTORY_RESET_TOGGLES
-	int "Latching switch 1: number of toggles for factory reset"
-	default 10
-	range 4 50
-
-config APP_FACTORY_RESET_TOGGLE_WINDOW_MS
-	int "Latching switch 1: time window for the factory reset toggles [ms]"
+	int "Reset pad: hold time for factory reset [ms]"
 	default 5000
-	range 1000 30000
+	range 1000 60000
+	help
+	  The factory reset pad (devicetree: `factory-reset-gpios` in the
+	  `zephyr,user` node) has to be held to GND continuously for this
+	  long. The pad is separate from the switch inputs, so no switch
+	  gesture can trigger a reset.
 
 endmenu
 
