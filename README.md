@@ -38,16 +38,16 @@ this is an uncertified Matter test device, and some ecosystems may reject it.
    to enter its UF2 bootloader. A USB drive appears. Copy the downloaded UF2
    file onto it; the board restarts when the copy completes.
 
-   > [!CAUTION]
-   > **On macOS, do not copy firmware with Finder.** Finder can enter a crash
-   > loop. Use Terminal instead, replacing the filename and drive as needed:
-   >
-   > ```sh
-   > cp -X battery-switch-xiao-nrf52840.uf2 /Volumes/XIAO-BOOT/
-   > ```
-   >
-   > `ls /Volumes` shows the drive name. A final `Input/output error` is normal
-   > if the board has already restarted after receiving the file.
+> [!CAUTION]
+> **On macOS, do not copy firmware with Finder.** Finder can enter a crash
+> loop. Use Terminal instead, replacing the filename and drive as needed:
+>
+> ```sh
+> cp -X battery-switch-xiao-nrf52840.uf2 /Volumes/XIAO-BOOT/
+> ```
+>
+> `ls /Volumes` shows the drive name. A final `Input/output error` is normal
+> if the board has already restarted after receiving the file.
 
 3. Open the board's USB serial port at 115200 baud:
    - macOS: `screen /dev/cu.usbmodem* 115200` (quit with Ctrl-A, then K)
