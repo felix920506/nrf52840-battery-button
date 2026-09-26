@@ -1347,7 +1347,7 @@
           "mfgCode": null,
           "define": "DIAGNOSTIC_LOGS_CLUSTER",
           "side": "server",
-          "enabled": 1,
+          "enabled": 0,
           "commands": [
             {
               "name": "RetrieveLogsRequest",
@@ -1667,7 +1667,7 @@
           "mfgCode": null,
           "define": "SOFTWARE_DIAGNOSTICS_CLUSTER",
           "side": "server",
-          "enabled": 1,
+          "enabled": 0,
           "attributes": [
             {
               "name": "CurrentHeapFree",
@@ -1773,7 +1773,7 @@
           "mfgCode": null,
           "define": "THREAD_NETWORK_DIAGNOSTICS_CLUSTER",
           "side": "server",
-          "enabled": 1,
+          "enabled": 0,
           "commands": [
             {
               "name": "ResetCounts",

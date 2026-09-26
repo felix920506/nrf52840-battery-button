@@ -494,6 +494,9 @@ endpoints 1–6.
 
 ## Known limitations
 
+* To save flash, endpoint 0 has none of the optional diagnostics clusters:
+  Thread Network Diagnostics, Software Diagnostics and Diagnostic Logs. General
+  Diagnostics, which is mandatory, is still there.
 * All six switch endpoints share one endpoint type in the `.zap` file. So a
   `latching` endpoint still lists `MultiPressMax` in its AttributeList, even
   though its feature map is `LS`. Controllers ignore this, but it would need

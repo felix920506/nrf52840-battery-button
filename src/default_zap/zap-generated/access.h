@@ -126,7 +126,6 @@
     0x00000031, /* Cluster: Network Commissioning, Command: ConnectNetwork, Privilege: administer */ \
     0x00000031, /* Cluster: Network Commissioning, Command: ReorderNetwork, Privilege: administer */ \
     0x00000033, /* Cluster: General Diagnostics, Command: TestEventTrigger, Privilege: manage */ \
-    0x00000035, /* Cluster: Thread Network Diagnostics, Command: ResetCounts, Privilege: manage */ \
     0x0000003C, /* Cluster: Administrator Commissioning, Command: OpenCommissioningWindow, Privilege: administer */ \
     0x0000003C, /* Cluster: Administrator Commissioning, Command: OpenBasicCommissioningWindow, Privilege: administer */ \
     0x0000003C, /* Cluster: Administrator Commissioning, Command: RevokeCommissioning, Privilege: administer */ \
@@ -162,7 +161,6 @@
     0x00000006, /* Cluster: Network Commissioning, Command: ConnectNetwork, Privilege: administer */ \
     0x00000008, /* Cluster: Network Commissioning, Command: ReorderNetwork, Privilege: administer */ \
     0x00000000, /* Cluster: General Diagnostics, Command: TestEventTrigger, Privilege: manage */ \
-    0x00000000, /* Cluster: Thread Network Diagnostics, Command: ResetCounts, Privilege: manage */ \
     0x00000000, /* Cluster: Administrator Commissioning, Command: OpenCommissioningWindow, Privilege: administer */ \
     0x00000001, /* Cluster: Administrator Commissioning, Command: OpenBasicCommissioningWindow, Privilege: administer */ \
     0x00000002, /* Cluster: Administrator Commissioning, Command: RevokeCommissioning, Privilege: administer */ \
@@ -198,7 +196,6 @@
     chip::Access::Privilege::kAdminister, /* Cluster: Network Commissioning, Command: ConnectNetwork, Privilege: administer */ \
     chip::Access::Privilege::kAdminister, /* Cluster: Network Commissioning, Command: ReorderNetwork, Privilege: administer */ \
     chip::Access::Privilege::kManage, /* Cluster: General Diagnostics, Command: TestEventTrigger, Privilege: manage */ \
-    chip::Access::Privilege::kManage, /* Cluster: Thread Network Diagnostics, Command: ResetCounts, Privilege: manage */ \
     chip::Access::Privilege::kAdminister, /* Cluster: Administrator Commissioning, Command: OpenCommissioningWindow, Privilege: administer */ \
     chip::Access::Privilege::kAdminister, /* Cluster: Administrator Commissioning, Command: OpenBasicCommissioningWindow, Privilege: administer */ \
     chip::Access::Privilege::kAdminister, /* Cluster: Administrator Commissioning, Command: RevokeCommissioning, Privilege: administer */ \
