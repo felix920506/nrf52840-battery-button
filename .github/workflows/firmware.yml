@@ -23,9 +23,18 @@ on:
       - "**.md"
       - "docs/**"
       - "LICENSE"
+  # Not pull_request_target: that would run the base branch's workflow, but
+  # with write access, secrets and the base branch's cache, while the build
+  # still runs the PR's own code (CMake, west.yml, tools/). A pull_request run
+  # from a fork gets a read-only token, no secrets and a cache scoped to the
+  # PR, whatever workflow file the PR carries.
   pull_request:
     paths-ignore: *docs
   workflow_dispatch:
+
+# Jobs get a read-only token unless they ask for more (only release does).
+permissions:
+  contents: read
 
 env:
   NCS_VERSION: v3.4.1
@@ -51,9 +60,12 @@ jobs:
           # here: it needs Nordic's tools to flash, so it is left to advanced
           # users who build it themselves.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: ws/nrf52840-battery-button
+          # Nothing pushes back, so don't leave the token in .git/config for
+          # the build to read.
+          persist-credentials: false
           # Full history with tags: the firmware version is the tag or the
           # short commit hash (see sysbuild.cmake).
           fetch-depth: 0
@@ -69,7 +81,7 @@ jobs:
           ~/.local/bin/nrfutil sdk-manager toolchain install --ncs-version "$NCS_VERSION"
 
       - name: Cache the SDK sources
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ws/.west
@@ -107,7 +119,7 @@ jobs:
           nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
             python3 tools/provision_device.py --build-dir build --blank out/new-pairing-code.uf2
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: battery-switch-${{ matrix.name }}
           path: ws/nrf52840-battery-button/out/*
@@ -119,7 +131,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: out
           merge-multiple: true
