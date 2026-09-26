@@ -1,5 +1,5 @@
 #
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: MIT
 #
 # Builds build/battery_switch_app.uf2 for the Adafruit UF2 bootloader. It
 # contains the application only, never Matter factory data, so the same file

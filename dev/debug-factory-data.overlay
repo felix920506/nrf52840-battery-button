@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Development: room for logging (usb-logging.conf) while keeping factory
  * data. The application grows up to 0xEAFFF and the factory data moves to

@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * USB serial port showing the pairing code (CONFIG_APP_USB_INFO).
  */

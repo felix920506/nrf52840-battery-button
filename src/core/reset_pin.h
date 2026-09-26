@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Factory reset through a dedicated pad that is not a switch input
  * (devicetree: `factory-reset-gpios` in the `zephyr,user` node). The reset

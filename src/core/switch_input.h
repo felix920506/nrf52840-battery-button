@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * GPIO handling for the external switches: interrupt wake-up, debouncing
  * and low-power polling of closed latching switches.

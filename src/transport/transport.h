@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Interface between the transport independent core (switches, battery) and
  * the radio protocol. Exactly one implementation is built, selected with

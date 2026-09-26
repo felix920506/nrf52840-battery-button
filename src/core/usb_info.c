@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * USB serial port that shows how to pair the device: when a terminal opens
  * the port, the pairing code and a QR code (drawn with text characters) are

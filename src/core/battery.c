@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * The battery is connected directly to the 3V3 rail, so the battery voltage
  * is the nRF52840 VDD, which the SAADC can measure internally without a

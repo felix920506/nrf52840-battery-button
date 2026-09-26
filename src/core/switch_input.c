@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Power strategy:
  *  - An open switch draws no current. Its pin has the pull-up enabled and a

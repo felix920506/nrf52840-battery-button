@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Adafruit Feather nRF52840 Express: adafruit_feather_nrf52840/nrf52840/uf2.
  * The image also runs on the Feather nRF52840 Sense (same pins, the blue

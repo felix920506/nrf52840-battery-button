@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Persistent switch types. Devicetree provides the defaults; a type changed at
  * runtime (e.g. from the smart home app) is stored in settings and restored

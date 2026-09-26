@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: MIT
 """
 Give a device running the dev/ot-shell.conf build the Thread dataset of a
 local ot-daemon network, then start Thread on it.

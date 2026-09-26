@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Turns debounced switch states into switch events. The events follow the
  * Matter Switch cluster semantics (they map 1:1 to its events), but nothing

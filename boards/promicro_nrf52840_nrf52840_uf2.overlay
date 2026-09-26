@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Pro Micro nRF52840 and compatibles (nice!nano, SuperMini nRF52840, ...):
  * promicro_nrf52840/nrf52840/uf2. Build-tested only.

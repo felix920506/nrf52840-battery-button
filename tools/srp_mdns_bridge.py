@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: MIT
 """
 Republish Matter services registered with an OpenThread SRP server (ot-daemon)
 on the host's mDNS, using `dns-sd -P` proxy registrations (macOS).

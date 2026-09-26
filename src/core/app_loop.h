@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Single application event loop. Interrupts and timers only post small
  * events here; all application logic runs in the main thread, so the core

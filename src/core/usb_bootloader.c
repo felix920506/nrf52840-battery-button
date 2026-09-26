@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: MIT
  *
  * Development helper for builds with the USB console (usb-logging.conf):
  * reboot into the Adafruit bootloader when the host opens the USB serial
