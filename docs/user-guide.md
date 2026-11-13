@@ -190,3 +190,9 @@ as well.
   Matter test credentials are not accepted by every ecosystem.
 - **Device does not join Thread:** confirm the controller has a working Thread
   border router and that the device is powered and in range.
+- **A switch triggers on its own:** the switch cable is picking up
+  interference, typically from mains wiring next to it. Keep the cable short,
+  twist each switch wire with its GND wire, and route it away from mains
+  conductors. The firmware only accepts a change that several samples in a row
+  agree on; if that is not enough, build with a larger
+  `CONFIG_APP_DEBOUNCE_LATCHING_MS` and `CONFIG_APP_DEBOUNCE_SAMPLES`.

@@ -50,7 +50,7 @@ config APP_DEBOUNCE_MS
 
 config APP_DEBOUNCE_LATCHING_MS
 	int "Latching switch: debounce time [ms]"
-	default 20
+	default 30
 	range 1 500
 	help
 	  Debounce time for latching switches. They report every bounce
@@ -58,6 +58,23 @@ config APP_DEBOUNCE_LATCHING_MS
 	  contacts may need more than momentary switches. Nobody flips a
 	  switch twice within 100 ms, so values up to that cost no
 	  responsiveness.
+
+	  With the default 4 samples this samples every 7.5 ms, which does
+	  not line up with interference repeating at 50/60 Hz mains (or
+	  twice that).
+
+config APP_DEBOUNCE_SAMPLES
+	int "Samples that must agree within the debounce time"
+	default 4
+	range 1 16
+	help
+	  The debounce time is split into this many evenly spaced samples.
+	  A change is only accepted once that many samples in a row read
+	  the same level, so a noise spike on the switch cable (e.g. from
+	  mains wiring next to it) is not taken for a change. Increase it,
+	  together with the debounce time, if switches still trigger on
+	  their own. 1 restores a single sample at the end of the debounce
+	  time.
 
 config APP_LONG_PRESS_MS
 	int "Momentary switch: hold time for a long press [ms]"

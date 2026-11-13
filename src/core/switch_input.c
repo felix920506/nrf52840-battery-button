@@ -64,6 +64,10 @@ struct input_state {
 	bool active;
 	/* Waiting for the debounce timer. */
 	bool debouncing;
+	/* Level of the latest debounce sample, and how many in a row agreed. */
+	bool candidate;
+	uint8_t stable_samples;
+	uint8_t total_samples;
 	/* Closed latching switch: pin disconnected, sampled by the poll timer. */
 	bool polling;
 };
@@ -113,13 +117,32 @@ static bool read_pin(uint8_t idx)
 	return gpio_pin_get_dt(&specs[idx]) > 0;
 }
 
-static void start_debounce(uint8_t idx)
+/* Give up on a pin that never settles, so noise can't keep the CPU awake. */
+#define DEBOUNCE_MAX_SAMPLES (8 * CONFIG_APP_DEBOUNCE_SAMPLES)
+
+BUILD_ASSERT(DEBOUNCE_MAX_SAMPLES <= UINT8_MAX);
+
+/*
+ * The debounce time is split into CONFIG_APP_DEBOUNCE_SAMPLES samples that
+ * all have to agree. A single sample would turn one noise spike (e.g. picked
+ * up from mains wiring next to the switch cable) into a change, which a
+ * latching switch reports as a press.
+ */
+static void schedule_sample(uint8_t idx)
 {
 	uint32_t ms = switch_input_is_latching(idx) ? CONFIG_APP_DEBOUNCE_LATCHING_MS
 						    : CONFIG_APP_DEBOUNCE_MS;
+	uint32_t us = MAX(ms * 1000U / CONFIG_APP_DEBOUNCE_SAMPLES, 1U);
 
+	k_timer_start(&inputs[idx].debounce_timer, K_USEC(us), K_NO_WAIT);
+}
+
+static void start_debounce(uint8_t idx)
+{
 	inputs[idx].debouncing = true;
-	k_timer_start(&inputs[idx].debounce_timer, K_MSEC(ms), K_NO_WAIT);
+	inputs[idx].stable_samples = 0;
+	inputs[idx].total_samples = 0;
+	schedule_sample(idx);
 }
 
 static void start_polling(void)
@@ -162,12 +185,31 @@ static void process_debounce(uint8_t idx)
 		return;
 	}
 
+	bool active = read_pin(idx);
+
+	if (in->total_samples == 0 || active != in->candidate) {
+		in->candidate = active;
+		in->stable_samples = 1;
+	} else {
+		in->stable_samples++;
+	}
+	in->total_samples++;
+
+	bool settled = in->stable_samples >= CONFIG_APP_DEBOUNCE_SAMPLES;
+
+	if (!settled && in->total_samples < DEBOUNCE_MAX_SAMPLES) {
+		schedule_sample(idx);
+		return;
+	}
+
 	in->debouncing = false;
 
-	bool active = read_pin(idx);
-	bool changed = active != in->active;
+	/* A pin that never settled keeps its state; arm() catches a real change. */
+	bool changed = settled && active != in->active;
 
-	in->active = active;
+	if (changed) {
+		in->active = active;
+	}
 	arm(idx);
 
 	if (changed) {
