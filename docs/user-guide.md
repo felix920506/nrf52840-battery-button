@@ -88,14 +88,23 @@ Thread.
 The device keeps the pairing events since it started (about 70 events; the
 oldest are dropped first) and prints them all whenever a terminal opens the
 port, after the pairing code. Closing and reopening the terminal, or opening
-it only after a failed attempt, loses nothing.
+it only after a failed attempt, loses nothing. The events also survive a
+crash and a factory reset: a `---- Restarted ----` line separates them from
+the events after the restart, and a crash is reported with its cause. Only a
+power cycle (unplugging USB, removing the battery) erases them, so after a
+failed attempt, keep USB connected until you have looked at them.
+
+Event times count seconds since the device started. `S` shows the current
+uptime and why the device last restarted, so you can work out when an event
+happened and find it in your controller's logs.
 
 Press a key in the terminal to run a command:
 
 | Key | Command |
 |---|---|
-| `S` | Status: paired controllers (fabrics), pairing mode, last pairing attempt, Thread network, role and service registration with the border router |
+| `S` | Status: uptime, last restart reason, paired controllers (fabrics), pairing mode, last pairing attempt, Thread network, role and service registration with the border router |
 | `L` | Pairing events again |
+| `D` | Diagnostics report for support: firmware, status and all pairing events, without the pairing code |
 | `P` | Start pairing mode (Bluetooth advertising), like pressing a switch |
 | `X` | Stop pairing mode |
 | `I` | Show the pairing code and QR code again |
@@ -252,3 +261,47 @@ as well.
   conductors. The firmware only accepts a change that several samples in a row
   agree on; if that is not enough, build with a larger
   `CONFIG_APP_DEBOUNCE_LATCHING_MS` and `CONFIG_APP_DEBOUNCE_SAMPLES`.
+
+### Troubleshoot with a coding agent
+
+If the list above doesn't help, `tools/triage.py` starts a coding agent
+(Claude Code, Codex, or Antigravity, whichever is installed) that investigates
+the problem with you. It looks at the connected board, the docs and the
+firmware source for your version, searches existing issues, and can help you
+file a good one. It asks before it runs anything that changes your device and
+before it posts anything.
+
+You need Python 3 and one of the agent CLIs (`claude`, `codex`, or `agy`).
+Connect the board over USB if you can (without the battery), then run, from a
+clone of this repository:
+
+```sh
+python3 tools/triage.py
+```
+
+Or, without a clone:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/felix920506/nrf52840-battery-button/master/tools/triage.py
+python3 triage.py
+```
+
+If more than one agent is installed, it asks which one to use; choose with
+`--agent claude`, `--agent codex` or `--agent antigravity`, and a model with
+`--model <model-id>`. `--no-serial` skips opening the board's serial port. On
+Windows, reading the serial port needs `pip install pyserial`.
+
+The script writes a triage folder with a `context.md` describing this computer
+and the connected board, and the playbook the agent follows. With current
+firmware, it also reads the device's diagnostics report (the `D` command), so
+after a failed pairing attempt the agent sees every step the controller took
+and where it stopped. Run it before unplugging the board: a power cycle
+erases those events. The pairing code,
+QR code and serial number are left out of `context.md`. With no agent
+installed, the script prints the files' paths so you can paste the playbook
+into any coding agent.
+
+If your agent has a Home Assistant MCP server set up, the agent asks whether it
+may connect to your Home Assistant server. With your permission, it reads the
+device, its entities and related logs there instead of asking you to copy them.
+It only reads unless you approve a specific change.

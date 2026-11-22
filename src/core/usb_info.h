@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 #include <zephyr/toolchain.h>
 
 #ifdef __cplusplus
@@ -27,6 +29,15 @@ void usb_info_flush(void);
 
 /* Handle a key typed in the terminal (on APP_EVT_USB_KEY). */
 void usb_info_key(void);
+
+/*
+ * Keep the diagnostic history for the next start: call right before a
+ * restart the device chooses (crash, factory reset). A power cycle loses it.
+ */
+void usb_info_retain(void);
+
+/* True if this start kept the history of the previous run. */
+bool usb_info_history_restored(void);
 
 /* See core/diag.h. */
 void usb_info_event(const char *fmt, ...) __printf_like(1, 2);

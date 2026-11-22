@@ -49,6 +49,7 @@
 #include <app/util/MatterCallbacks.h>
 #include <app/util/generic-callbacks.h>
 #include <platform/CHIPDeviceLayer.h>
+#include <platform/DiagnosticDataProvider.h>
 #include <platform/ThreadStackManager.h>
 #include <platform/nrfconnect/FactoryDataProvider.h>
 #include <setup_payload/OnboardingCodesUtil.h>
@@ -861,6 +862,32 @@ void transport_print_status(void)
 		   thread.networkName, thread.channel, thread.panId);
 	diag_print("Service registration with the border router (SRP): %s",
 		   thread.srpRunning ? SrpStateName(thread.srpState) : "not started");
+}
+
+const char *transport_boot_reason(void)
+{
+	using Clusters::GeneralDiagnostics::BootReasonEnum;
+	BootReasonEnum reason;
+
+	/* Matter reads the hardware reset cause once and clears it, so ask Matter. */
+	if (GetDiagnosticDataProvider().GetBootReason(reason) != CHIP_NO_ERROR) {
+		return nullptr;
+	}
+	switch (reason) {
+	case BootReasonEnum::kPowerOnReboot:
+		return "power on or reset button";
+	case BootReasonEnum::kBrownOutReset:
+		return "brown-out (supply voltage too low)";
+	case BootReasonEnum::kSoftwareWatchdogReset:
+	case BootReasonEnum::kHardwareWatchdogReset:
+		return "watchdog";
+	case BootReasonEnum::kSoftwareUpdateCompleted:
+		return "firmware update";
+	case BootReasonEnum::kSoftwareReset:
+		return "software restart (crash, factory reset or bootloader)";
+	default:
+		return nullptr;
+	}
 }
 
 void transport_factory_reset(void)

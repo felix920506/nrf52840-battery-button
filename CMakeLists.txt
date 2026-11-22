@@ -33,6 +33,7 @@ target_sources_ifdef(CONFIG_APP_USB_INFO app PRIVATE
   src/core/usb_info.c
   src/third_party/qrcodegen/qrcodegen.c
 )
+target_sources_ifdef(CONFIG_APP_CRASH_RESTART app PRIVATE src/core/crash.c)
 target_sources_ifdef(CONFIG_APP_USB_BOOTLOADER_RESET app PRIVATE src/core/usb_bootloader.c)
 target_sources_ifdef(CONFIG_APP_TRANSPORT_BLE app PRIVATE src/transport/ble/ble_transport.c)
 
