@@ -21,8 +21,9 @@ Without a clone of this repository, download just this file:
 Only the Python standard library is needed. On Windows, reading the device's
 serial port also needs pyserial (pip install pyserial).
 
-The pairing code, QR code payload and serial number are never written to
-context.md.
+The device serial number, Thread network credentials and the home directory
+are never written to context.md. The pairing code and QR code payload are
+kept: the agent may need them to help the user pair.
 """
 
 import argparse
@@ -59,11 +60,7 @@ KNOWN_USB = {
 
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 SECRET_PATTERNS = (
-    (re.compile(r"MT:[0-9A-Z.\-]+"), "MT:<redacted>"),
-    (re.compile(r"(?i)(pairing code:\s*)[^\s,]+"), r"\1<redacted>"),
-    (re.compile(r"(?i)(qr code:\s*)[^\s,]+"), r"\1<redacted>"),
     (re.compile(r"(?i)(serial number[:\s]+)[0-9A-Fa-f]+"), r"\1<redacted>"),
-    (re.compile(r"\b\d{4}-?\d{3}-?\d{4}\b"), "<redacted>"),
     (re.compile(r"(?i)(network ?key|pskc|dataset)([:\s]+)\S+"), r"\1\2<redacted>"),
 )
 
@@ -279,7 +276,7 @@ def read_device(device, seconds):
 
 
 def summarize_serial(text):
-    """The banner without the QR code drawing and without secrets."""
+    """The banner without the QR code drawing and without the serial number."""
     lines = []
     for raw in text.replace("\r", "").split("\n"):
         if "\x1b[30;107m" in raw:  # A row of the QR code drawing.
@@ -352,8 +349,10 @@ def build_context(args, paths):
         "# Triage context",
         "",
         f"Generated {now.isoformat(timespec='seconds')} by tools/triage.py.",
-        "Home directory paths are shown as `~`. Pairing codes, QR payloads and",
-        "serial numbers were removed.",
+        "Home directory paths are shown as `~`; serial numbers and Thread network",
+        "credentials were removed. The device shows its pairing code only on the",
+        "serial console, so the user may not have seen it: if they need it to",
+        "pair, give it to them (see the playbook).",
         "",
         "## Computer",
         "",
