@@ -28,6 +28,7 @@
 #include "transport/transport.h"
 
 #include "core/app_loop.h"
+#include "core/diag.h"
 #include "core/status_led.h"
 
 #include <zephyr/bluetooth/bluetooth.h>
@@ -243,6 +244,20 @@ bool transport_is_provisioned(void)
 
 void transport_start_pairing(void)
 {
+}
+
+void transport_stop_pairing(void)
+{
+}
+
+bool transport_is_pairing(void)
+{
+	return false;
+}
+
+void transport_print_status(void)
+{
+	diag_print("Bluetooth LE test firmware: no pairing, any central can connect.");
 }
 
 void transport_factory_reset(void)

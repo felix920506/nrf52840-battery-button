@@ -56,6 +56,19 @@ bool transport_is_provisioned(void);
 /* Make the device discoverable for commissioning/pairing, if it is not already. */
 void transport_start_pairing(void);
 
+/* Stop being discoverable for pairing. */
+void transport_stop_pairing(void);
+
+/* True while the device is discoverable for pairing. */
+bool transport_is_pairing(void);
+
+/*
+ * Print the pairing and network state with diag_print() (core/diag.h), for
+ * troubleshooting. Pairing steps and failures are reported as they happen
+ * with diag_event().
+ */
+void transport_print_status(void);
+
 /* Erase all network credentials and settings, then reboot. */
 void transport_factory_reset(void);
 

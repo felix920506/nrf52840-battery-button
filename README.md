@@ -55,7 +55,9 @@ this is an uncertified Matter test device, and some ecosystems may reject it.
    - Windows: PuTTY or Arduino Serial Monitor, using the board's COM port
 
    The device prints a QR code and manual pairing code. Close and reopen the
-   port to print them again.
+   port to print them again. Keep the port open while pairing: if pairing
+   fails, it shows which step failed and what to check. Press `H` for
+   commands such as status and factory reset.
 
 4. In your Matter controller, scan the QR code or enter the pairing code. The
    controller setup needs access to a Thread border router. Pairing can be done

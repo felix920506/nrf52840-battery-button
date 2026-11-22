@@ -33,6 +33,10 @@ enum app_evt_type {
 	APP_EVT_FACTORY_RESET_TIMER,
 	/* usb_info: a terminal opened the USB serial port. */
 	APP_EVT_USB_TERMINAL,
+	/* usb_info: a key was typed in the terminal. */
+	APP_EVT_USB_KEY,
+	/* usb_info: new diagnostic events to show in the terminal. */
+	APP_EVT_USB_DIAG,
 };
 
 struct app_evt {

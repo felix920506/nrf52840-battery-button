@@ -61,6 +61,43 @@ an uncertified test device using Matter development credentials; some
 ecosystems warn and allow setup, while others reject it or require extra
 developer configuration.
 
+### Pairing diagnostics on the serial port
+
+Smart home apps often report only "pairing failed". Keep the serial port open
+while pairing: the device prints each step as the controller takes it, and if
+pairing fails, the step where it stopped and what to check. For example:
+
+```text
+[  41.2 s] Bluetooth: controller connected
+[  41.9 s] Controller is checking the pairing code (PASE)
+[  43.4 s] Pairing code accepted, secure session established
+[  43.6 s] Controller: arm fail-safe (start or extend, or cancel commissioning)
+[  44.1 s] Controller: read device certificate
+[  44.8 s] Controller: check device attestation
+[  51.0 s] Fail-safe expired: the controller cancelled pairing or a step timed out
+[  51.0 s] Pairing FAILED at step: controller checking the device certificate
+[  51.0 s]   -> The controller stopped after reading the device certificate. This is an
+...
+```
+
+The failure explanations cover a wrong pairing code, a rejected device
+certificate, a controller without Thread credentials, a device that cannot
+join the Thread network, and a controller that cannot reach the device over
+Thread. The device keeps the last 16 events, so you can also open the port
+after a failed attempt and press `L`.
+
+Press a key in the terminal to run a command:
+
+| Key | Command |
+|---|---|
+| `S` | Status: paired controllers (fabrics), pairing mode, last pairing attempt, Thread network, role and service registration with the border router |
+| `L` | Recent pairing events |
+| `P` | Start pairing mode (Bluetooth advertising), like pressing a switch |
+| `X` | Stop pairing mode |
+| `I` | Show the pairing code and QR code again |
+| `F` | Factory reset; press `Y` to confirm |
+| `H` | Help |
+
 The pairing code persists through firmware updates and factory resets. Keep it
 private: anyone in Bluetooth range can commission an unpaired device if they
 know the code, and anyone with physical USB access can read it on automatically
@@ -186,10 +223,17 @@ as well.
   that point is expected.
 - **No pairing code appears:** confirm the board is running the firmware, then
   close and reopen the correct USB serial port at 115200 baud.
+- **Pairing fails:** keep the serial port open while pairing and read the
+  [pairing diagnostics](#pairing-diagnostics-on-the-serial-port); press `S`
+  for the current state.
 - **Controller rejects the device:** only Home Assistant has been tested.
   Matter test credentials are not accepted by every ecosystem.
 - **Device does not join Thread:** confirm the controller has a working Thread
-  border router and that the device is powered and in range.
+  border router and that the device is powered and in range. The `S` command
+  shows the network the device was given and whether it is connected.
+- **Device was removed from the app but won't pair again:** press `S`. If it
+  still lists a controller, the device was not told it was removed; factory
+  reset it (`F` on the serial port, or the reset pad).
 - **A switch triggers on its own:** the switch cable is picking up
   interference, typically from mains wiring next to it. Keep the cable short,
   twist each switch wire with its GND wire, and route it away from mains
