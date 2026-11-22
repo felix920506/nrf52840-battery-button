@@ -5,8 +5,8 @@ body:
     attributes:
       value: |
         This is the structure `tools/triage.py` agents follow. Keep one problem per
-        issue. Never paste the pairing code, the QR code (`MT:...`), the device
-        serial number, Thread network keys or home directory paths.
+        issue. Never paste the device serial number, Thread network keys or home
+        directory paths.
 
   - type: textarea
     id: what-happened

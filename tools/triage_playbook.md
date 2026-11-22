@@ -173,41 +173,38 @@ time, at 115200 baud:
 
 - `D`: the diagnostics report: firmware, uptime, restart reason, status and
   the whole history between `--- BEGIN DIAGNOSTICS ---` and
-  `--- END DIAGNOSTICS ---`. Read-only, without the pairing code.
+  `--- END DIAGNOSTICS ---`. Read-only. It leaves out the pairing code; the
+  banner and `I` show it.
 - `S`: the status alone. `L`: the history alone. `H`: the list of commands.
+- `I`: the pairing code and QR code.
 
 Ask the user first for `P` (start pairing mode) and `X` (stop pairing mode).
-Send `I` (prints the pairing code and QR code) only to give the user their
-pairing code, as described below. Never send `F` (factory reset): if a factory
-reset is needed, explain what it erases and let the user do it. Send no other
-text to the port: every printable character is a key.
+Never send `F` (factory reset): if a factory reset is needed, explain what it
+erases and let the user do it. Send no other text to the port: every printable
+character is a key.
 
 ### Giving the user the pairing code
 
 The user needs the pairing code to pair, and it is only printed on the serial
-console. The context file has it redacted. If the user is about to pair or
-retry, and doesn't have the code in front of them (no serial terminal open,
-the port is held by this session, or the QR code drawing doesn't scan), offer
-to read it for them:
+console. If the user is about to pair or retry, and doesn't have the code in
+front of them (no serial terminal open, the port is held by this session, or
+the QR code drawing doesn't scan), give it to them:
 
-1. Send `I` and read the reply. Look for the line `Pairing code:` followed by
-   the 11-digit manual pairing code (shown as `1234-567-8901`). If instead it
-   says to see the label that came with the device, the code isn't stored on
-   the device: ask the user to use that label.
+1. Find the line `Pairing code:` followed by the 11-digit manual pairing code
+   (shown as `1234-567-8901`) in the banner in the context file. If it isn't
+   there (the banner wasn't printed), send `I` and read the reply. If instead
+   it says to see the label that came with the device, the code isn't stored
+   on the device: ask the user to use that label.
 2. Tell the user the 11-digit code in the chat, in the same grouping, and how
    to enter it: in the controller's add-device flow, choose the option to
    enter a setup code manually instead of scanning a QR code (the wording
    differs between apps and versions). Make sure the device is in pairing
    mode first; ask before sending `P` to start it.
-3. Give only the 11-digit code. Don't repeat the `MT:` QR payload; the user
-   can't type it, and the manual code is enough.
-4. Keep the code out of everything else: don't write it to a file in the
-   triage folder, a commit, an issue, a comment or a command line, and don't
-   repeat it later in the session unless the user asks again.
+3. Give the 11-digit code, not the `MT:` QR payload: the user can't type the
+   payload, and the manual code is enough.
 
 If pairing then fails with the code rejected, compare the code the user typed
-with the one you read (ask them to check digit by digit rather than having
-them paste it back), and check the history with `L` or `D`.
+with the one you read, and check the history with `L` or `D`.
 
 To watch a new attempt, ask the user whether you may hold the port open while
 they pair again. Read the port in the background, at 115200 baud with DTR set,
@@ -323,14 +320,11 @@ clone, and never the user's own clone without asking.
 
 ## 9. Redact
 
-The pairing code, the QR code payload (`MT:...`) and the device serial number
-are secrets: anyone in Bluetooth range who knows the code can commission an
-unpaired device. The context file has them removed. If you open the serial port
-yourself, or the user pastes its output, never repeat these values, and never
-put them in an issue or comment. The one exception is telling the user their
-own 11-digit pairing code in the chat so they can pair (see "Giving the user
-the pairing code"). Don't read `CURRENT.UF2` on a bootloader
-drive: it is a dump of the whole flash, factory data included.
+The pairing code and QR code payload (`MT:...`) are not secret: using them
+takes Bluetooth range of an unpaired device. They can stay in logs and in what
+you show the user, though an issue rarely needs them. Leave out the device
+serial number, which the context file has removed. Don't read `CURRENT.UF2` on
+a bootloader drive: it is a dump of the whole flash, factory data included.
 
 Also scrub Thread network credentials (network key, PSKc, active dataset), Home
 Assistant tokens and server addresses, names of rooms, people and other
