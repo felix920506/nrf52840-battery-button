@@ -191,11 +191,22 @@ config APP_USB_INFO
 	depends on USBD_CDC_ACM_CLASS && UART_LINE_CTRL
 	depends on !CDC_ACM_SERIAL_INITIALIZE_AT_BOOT
 	default y
+	select CRC
 	help
 	  When a terminal opens the USB serial port, print the pairing code
 	  and QR code. USB is only enabled while USB power is present, so it
 	  costs no current on battery. Not available with the USB console
 	  (usb-logging.conf), which logs the pairing code instead.
+
+config APP_CRASH_RESTART
+	bool "Restart after a crash and report it on the next start"
+	depends on !RESET_ON_FATAL_ERROR
+	default y
+	help
+	  On a fatal error, record the reason and the faulting address, keep
+	  the pairing diagnostics history, and restart. The next start reports
+	  the crash on the USB serial port. Replaces CONFIG_RESET_ON_FATAL_ERROR;
+	  turn it off in debug builds to halt on fatal errors instead.
 
 config APP_USB_DIAG_LOG_SIZE
 	int "Pairing diagnostics history on the USB serial port [bytes]"

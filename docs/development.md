@@ -17,6 +17,7 @@ src/core/status_led.*         LED patterns
 src/core/switch_config.*      stored switch types (settings)
 src/core/reset_pin.*          factory reset pad
 src/core/usb_info.*           USB serial port: pairing code, QR code, pairing diagnostics, key commands
+src/core/crash.*              records a crash and restarts; reported on the next start
 src/core/diag.h               diagnostic messages for the serial port (printk without it)
 src/transport/transport.h     interface to the radio protocol
 src/transport/matter/         Matter over Thread implementation, first-boot pairing code

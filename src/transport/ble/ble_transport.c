@@ -255,6 +255,11 @@ bool transport_is_pairing(void)
 	return false;
 }
 
+const char *transport_boot_reason(void)
+{
+	return NULL;
+}
+
 void transport_print_status(void)
 {
 	diag_print("Bluetooth LE test firmware: no pairing, any central can connect.");

@@ -69,6 +69,9 @@ bool transport_is_pairing(void);
  */
 void transport_print_status(void);
 
+/* Why the device last restarted, e.g. "power on or reset button"; NULL if unknown. */
+const char *transport_boot_reason(void);
+
 /* Erase all network credentials and settings, then reboot. */
 void transport_factory_reset(void);
 

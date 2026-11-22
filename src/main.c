@@ -9,6 +9,8 @@
 
 #include "core/app_loop.h"
 #include "core/battery.h"
+#include "core/crash.h"
+#include "core/diag.h"
 #include "core/reset_pin.h"
 #include "core/switch_config.h"
 #include "core/status_led.h"
@@ -36,8 +38,31 @@ static K_TIMER_DEFINE(battery_timer, battery_timer_expiry, NULL);
 static void factory_reset(void)
 {
 	LOG_WRN("Factory reset");
+	diag_event("Factory reset: erasing pairing and network settings, then restarting");
+#ifdef CONFIG_APP_USB_INFO
+	usb_info_retain();
+#endif
 	status_led_flash(5);
 	transport_factory_reset();
+}
+
+/* First diagnostic event of every start: separates it from a kept history. */
+static void report_start(void)
+{
+	const char *reason = transport_boot_reason();
+	struct crash_info crash;
+
+#ifdef CONFIG_APP_USB_INFO
+	if (usb_info_history_restored()) {
+		diag_event("---- Restarted. The events above are from before the restart. ----");
+	}
+#endif
+	diag_event("Device started: firmware %s, restart reason: %s", CONFIG_APP_FIRMWARE_VERSION,
+		   reason ? reason : "unknown");
+	if (crash_get_last(&crash)) {
+		diag_event("  -> The previous run CRASHED (%s at PC 0x%08x) and restarted.",
+			   crash_reason_name(crash.reason), (unsigned int)crash.pc);
+	}
 }
 
 static void on_switch_event(uint8_t index, const struct switch_event *evt)
@@ -123,6 +148,7 @@ int main(void)
 	int err;
 
 	suspend_external_flash();
+	report_start();
 
 	err = status_led_init();
 	if (err) {

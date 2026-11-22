@@ -10,6 +10,9 @@
  * show the status, start or stop pairing mode, factory reset. Smart home
  * apps often report only "pairing failed"; this shows which step failed.
  *
+ * The history survives a crash or a factory reset (but not a power cycle),
+ * so the events that led up to it can still be read afterwards.
+ *
  * USB is only enabled while USB power (VBUS) is present, so on battery this
  * costs no current.
  */
@@ -17,6 +20,7 @@
 #include "usb_info.h"
 
 #include "app_loop.h"
+#include "crash.h"
 #include "transport/transport.h"
 #include "third_party/qrcodegen/qrcodegen.h"
 
@@ -28,9 +32,11 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
+#include <zephyr/sys/crc.h>
 #include <zephyr/usb/usbd.h>
 
 #include <hal/nrf_power.h>
@@ -57,6 +63,9 @@ LOG_MODULE_REGISTER(usb_info, CONFIG_LOG_DEFAULT_LEVEL);
 /* How long the factory reset command waits for its confirmation. */
 #define RESET_CONFIRM_MS 10000
 
+/* Marks a history kept for the next start (usb_info_retain()). */
+#define RETAIN_MAGIC 0x44494147 /* "DIAG" */
+
 static const struct device *const uart = DEVICE_DT_GET_ONE(zephyr_cdc_acm_uart);
 
 USBD_DEVICE_DEFINE(usb_info_usbd, DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)), USB_VID, USB_PID);
@@ -76,17 +85,31 @@ static void (*factory_reset_cb)(void);
 static int64_t reset_requested_at = -1;
 
 /*
- * Diagnostic history since the device started: lines ending in '\n', in a
- * byte ring. The positions count bytes ever written: the history is
- * diag_tail..diag_head (diag_tail is always at the start of a line), and
- * diag_shown is how far the open terminal has been shown. When the ring
- * is full, the oldest lines are dropped. Written from any thread, read in
- * the application loop.
+ * Diagnostic history: lines ending in '\n', in a byte ring. The positions
+ * count bytes ever written: the history is tail..head (tail is always at
+ * the start of a line), and diag_shown is how far the open terminal has
+ * been shown. When the ring is full, the oldest lines are dropped. Written
+ * from any thread, read in the application loop.
+ *
+ * The history isn't initialized at boot. Before a restart the device
+ * chooses (crash, factory reset), usb_info_retain() seals it with a CRC,
+ * and the next start keeps it if the CRC still matches. Otherwise, e.g.
+ * after power-on or if the bootloader used that RAM, it starts empty.
  */
-static char diag_ring[CONFIG_APP_USB_DIAG_LOG_SIZE];
-static uint32_t diag_tail;
-static uint32_t diag_head;
+static struct {
+	uint32_t magic;
+	uint32_t crc;
+	uint32_t tail;
+	uint32_t head;
+	char ring[CONFIG_APP_USB_DIAG_LOG_SIZE];
+} hist __noinit;
+
+#define diag_ring hist.ring
+#define diag_tail hist.tail
+#define diag_head hist.head
+
 static uint32_t diag_shown;
+static bool diag_restored;
 static struct k_spinlock diag_lock;
 
 static size_t tx_count;
@@ -180,6 +203,7 @@ static void put_help(void)
 	put("Commands (press the key):\r\n"
 	    "  S  status: pairing, network, controllers, last pairing attempt\r\n"
 	    "  L  pairing events since the device started\r\n"
+	    "  D  diagnostics report for support (no pairing code)\r\n"
 	    "  P  start pairing mode (Bluetooth advertising)\r\n"
 	    "  X  stop pairing mode\r\n"
 	    "  I  show the pairing code and QR code again\r\n"
@@ -234,6 +258,40 @@ static void take_unshown(uint32_t *from, uint32_t *to)
 	k_spin_unlock(&diag_lock, key);
 }
 
+static uint32_t hist_crc(void)
+{
+	uint32_t crc = crc32_ieee((const uint8_t *)&hist.tail, sizeof(hist.tail) + sizeof(hist.head));
+
+	return crc32_ieee_update(crc, (const uint8_t *)hist.ring, sizeof(hist.ring));
+}
+
+void usb_info_retain(void)
+{
+	hist.crc = hist_crc();
+	hist.magic = RETAIN_MAGIC;
+}
+
+bool usb_info_history_restored(void)
+{
+	return diag_restored;
+}
+
+/* Before main() and the Matter thread, which can write events early. */
+static int hist_restore(void)
+{
+	diag_restored = hist.magic == RETAIN_MAGIC && hist.head >= hist.tail &&
+			hist.head - hist.tail <= sizeof(hist.ring) && hist.crc == hist_crc();
+	if (!diag_restored) {
+		hist.tail = 0;
+		hist.head = 0;
+	}
+	hist.magic = 0;
+	diag_shown = hist.head;
+	return 0;
+}
+
+SYS_INIT(hist_restore, POST_KERNEL, 0);
+
 void usb_info_print(void)
 {
 	uint32_t from, to;
@@ -255,7 +313,7 @@ void usb_info_print(void)
 	put_pairing_info();
 	if (from < to) {
 		put(dropped ? "Pairing events (the oldest were dropped):\r\n"
-			    : "Pairing events since the device started:\r\n");
+			    : "Pairing events:\r\n");
 		put_diag(from, to);
 		put("\r\n");
 	}
@@ -285,6 +343,10 @@ void usb_info_event(const char *fmt, ...)
 	}
 	for (int i = 0; i < len; i++) {
 		diag_ring[diag_head++ % sizeof(diag_ring)] = line[i];
+	}
+	/* Between usb_info_retain() and the restart: keep the seal valid. */
+	if (hist.magic == RETAIN_MAGIC) {
+		hist.crc = hist_crc();
 	}
 	k_spin_unlock(&diag_lock, key);
 
@@ -335,9 +397,46 @@ static void show_log(void)
 		return;
 	}
 	put(diag_tail != 0 ? "Pairing events (the oldest were dropped):\r\n"
-			   : "Pairing events since the device started:\r\n");
+			   : "Pairing events:\r\n");
 	put_diag(diag_tail, to);
 	put("\r\n");
+}
+
+static void put_device_state(void)
+{
+	uint32_t s = k_uptime_get_32() / 1000;
+	const char *reason = transport_boot_reason();
+	struct crash_info crash;
+
+	usb_info_printf("Uptime: %u s (%uh %02um; event times count from the last start)",
+			(unsigned int)s, (unsigned int)(s / 3600), (unsigned int)(s / 60 % 60));
+	usb_info_printf("Last restart: %s", reason ? reason : "unknown");
+	if (crash_get_last(&crash)) {
+		usb_info_printf("The run before it crashed: %s at PC 0x%08x",
+				crash_reason_name(crash.reason), (unsigned int)crash.pc);
+	}
+}
+
+/*
+ * Everything useful for support, between markers so a script can tell
+ * where it ends. Read-only, and without the pairing code or serial number.
+ */
+static void show_report(void)
+{
+	uint32_t from, to;
+
+	take_unshown(&from, &to);
+	put_diag(from, to);
+
+	put("\r\n--- BEGIN DIAGNOSTICS ---\r\n");
+	put(CONFIG_APP_PRODUCT_NAME "\r\n");
+	put("Firmware: " CONFIG_APP_FIRMWARE_VERSION "\r\n");
+	put("Hardware: " APP_BOARD_NAME " (" CONFIG_BOARD_TARGET ")\r\n");
+	put_device_state();
+	transport_print_status();
+	put("\r\n");
+	show_log();
+	put("--- END DIAGNOSTICS ---\r\n\r\n");
 }
 
 static void start_pairing(void)
@@ -391,12 +490,16 @@ void usb_info_key(void)
 	switch (c) {
 	case 'S':
 		put("\r\n");
+		put_device_state();
 		transport_print_status();
 		put("\r\n");
 		break;
 	case 'L':
 		put("\r\n");
 		show_log();
+		break;
+	case 'D':
+		show_report();
 		break;
 	case 'P':
 		start_pairing();
