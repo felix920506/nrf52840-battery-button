@@ -18,7 +18,11 @@ The Home Assistant token is a long-lived access token of an administrator
 the HA_TOKEN environment variable, or asks for it.
 
 Requirements on the Home Assistant side:
-  - The Matter integration.
+  - The Matter integration. Its Matter server refuses Matter test
+    certificates, which this device has, unless its test-net DCL option is
+    on. With the Matter Server add-on, the script turns the option on for
+    the pairing and off again afterwards, after asking (each change
+    restarts the add-on). Without the Supervisor, turn it on yourself.
   - A Thread border router, with its network as Home Assistant's preferred
     Thread network (Settings > Devices & services > Thread), within range of
     the device, which is connected to this computer.
@@ -179,20 +183,21 @@ class HomeAssistant:
                 if first & 0x80:
                     return json.loads(message)
 
-    def call(self, command, timeout=30, **data):
-        """Runs a command and returns its result. Raises Error with Home
-        Assistant's error code and message if it fails."""
+    def call(self, command, wait=30, **data):
+        """Runs a command and returns its result, waiting up to `wait`
+        seconds. Raises Error with Home Assistant's error code and message
+        if it fails."""
         msg_id = self.next_id
         self.next_id += 1
         self._send({"id": msg_id, "type": command, **data})
-        self.sock.settimeout(timeout)
+        self.sock.settimeout(wait)
         try:
             while True:
                 reply = self.receive()
                 if reply.get("id") == msg_id and reply.get("type") == "result":
                     break
         except socket.timeout as err:
-            raise Error(f"{command}: no answer from Home Assistant within {timeout} s") from err
+            raise Error(f"{command}: no answer from Home Assistant within {wait} s") from err
         if not reply.get("success"):
             error = reply.get("error") or {}
             raise Error(f"{command} failed: {error.get('message') or 'no message'}"
@@ -236,6 +241,78 @@ def choose_dataset(ha, network_name):
     names = ", ".join(sorted({d.get("network_name", "?") for d in datasets}))
     raise Error(f"Home Assistant has no preferred Thread network. Choose one in "
                 f"Settings > Devices & services > Thread, or pass --thread-network ({names}).")
+
+
+class MatterServerAddon:
+    """The Matter Server add-on's test-net DCL option, through the Supervisor
+    (Home Assistant OS and Supervised installs only). Home Assistant's Matter
+    server refuses devices with Matter test certificates unless it is on."""
+
+    SLUG = "core_matter_server"
+    OPTION = re.compile(r"(?i)test.?net.?dcl")
+
+    def __init__(self, ha, options, key):
+        self.ha = ha
+        self.options = options
+        self.key = key
+        self.original = bool(options[key])
+
+    @classmethod
+    def find(cls, ha):
+        """The add-on, or (None, why not)."""
+        try:
+            info = cls._api(ha, "info", "get")
+        except Error:
+            return None, ("no Supervisor (Home Assistant Container or Core) or no Matter "
+                          "Server add-on")
+        options = (info or {}).get("options") or {}
+        key = next((k for k in options if cls.OPTION.search(k)), None)
+        if key is None:
+            return None, "the Matter Server add-on has no test-net DCL option"
+        return cls(ha, options, key), None
+
+    @classmethod
+    def _api(cls, ha, path, method, wait=30, **data):
+        return ha.call("supervisor/api", wait=wait, endpoint=f"/addons/{cls.SLUG}/{path}",
+                       method=method, **data)
+
+    def set(self, value):
+        """Sets the option and restarts the add-on, then waits until Home
+        Assistant's Matter integration has reconnected."""
+        options = dict(self.options, **{self.key: value})
+        self._api(self.ha, "options", "post", data={"options": options})
+        self._api(self.ha, "restart", "post", wait=240, timeout=240)
+        wait_for_matter(self.ha)
+
+    def restore(self):
+        print("Turning the Matter server's test-net DCL option off again (restarts it)...",
+              flush=True)
+        try:
+            self.set(self.original)
+            print("  Done.")
+        except (Error, OSError) as err:
+            print(f"  Could not turn it off: {err}\n"
+                  "  Turn it off by hand: Settings > Add-ons > Matter Server > Configuration,\n"
+                  "  then restart the add-on.", file=sys.stderr)
+
+
+def wait_for_matter(ha, timeout=180):
+    """Waits until the Matter integration has reconnected after a restart of
+    the Matter server: it drops out of "loaded" and comes back, or (if it
+    never noticed) stays loaded for a while."""
+    end = time.monotonic() + timeout
+    start = time.monotonic()
+    dropped = False
+    while time.monotonic() < end:
+        entry, _ = loaded_entry(ha, "matter")
+        if not entry:
+            dropped = True
+        elif dropped or time.monotonic() - start > 20:
+            time.sleep(3)
+            return
+        time.sleep(2)
+    raise Error("Home Assistant's Matter integration did not come back after the Matter "
+                "server restarted. Check the Matter Server add-on's log.")
 
 
 # --- The device ------------------------------------------------------------
@@ -483,64 +560,97 @@ def pair_device(args, token, port, device):
             print(f"  Thread network: {dataset.get('network_name')} "
                   f"(channel {dataset.get('channel')}, PAN ID {dataset.get('pan_id')})")
 
+        addon = None
+        if args.keep_matter_settings:
+            print("  Matter server: not checked (--keep-matter-settings); its test-net DCL "
+                  "option must be on")
+        else:
+            addon, why = MatterServerAddon.find(ha)
+            if addon is None:
+                print(f"  Matter server: can't check its test-net DCL option ({why}); "
+                      "it must be on")
+            else:
+                print(f"  Matter server: test-net DCL option {'on' if addon.original else 'off'}")
+        toggle = addon is not None and not addon.original
+
         how = "over Bluetooth" if args.bluetooth else "over the Thread network"
+        if toggle:
+            print("\nThis device has Matter test certificates, which the Matter server only "
+                  "accepts with its\ntest-net DCL option on. The script turns it on for the "
+                  "pairing and off again afterwards,\nrestarting the Matter server each time: "
+                  "your Matter devices are unavailable in Home\nAssistant for about a minute, "
+                  "twice. Devices already paired are not affected by the option.")
         if not confirm(f"Pair the device with this Home Assistant {how}?"):
             print("Cancelled.")
             return 1
 
-        tlv = (ha.call("thread/get_dataset_tlv", dataset_id=dataset["dataset_id"])["tlv"]
-               if dataset else None)
-        # From here on the device's pairing events are shown as they arrive.
-        device.start()
-        if has_commands:
-            start_pairing_mode(device)
-        else:
-            print("  (This firmware has no serial commands. If it stopped advertising, press "
-                  "a switch to restart pairing mode.)")
-
-        if args.bluetooth:
-            if tlv:
-                ha.call("matter/set_thread", thread_operation_dataset=tlv)
-                print("Gave the Matter server the Thread network.")
-            print("Home Assistant is pairing the device over Bluetooth. This can take a few "
-                  "minutes.\n", flush=True)
-        else:
-            give_thread_network(device, tlv)
-            print("Gave the device the Thread network over USB. Waiting for it to join...",
-                  flush=True)
-            wait_until_on_network(device, args.join_timeout)
-            print("Home Assistant is pairing the device over the network. This can take a "
-                  "minute or two.\n", flush=True)
-
-        started = time.monotonic()
+        if not toggle:
+            return run_pairing(args, ha, device, dataset, qr, has_commands, before, False)
+        print("Turning the Matter server's test-net DCL option on (restarts it)...",
+              flush=True)
+        addon.set(True)
+        print("  Done.")
         try:
-            ha.call("matter/commission", timeout=COMMISSION_TIMEOUT, code=qr,
-                    network_only=not args.bluetooth)
-            error = None
-        except Error as err:
-            error = err
-        # Let the device's last events arrive.
-        time.sleep(2)
-
-        print()
-        if error:
-            explain_failure(error, device.events, args.bluetooth)
-            return 1
-        print(f"Paired in {time.monotonic() - started:.0f} s.")
-
-        for _ in range(15):
-            new = [d for i, d in matter_devices(ha).items() if i not in before]
-            if new:
-                print(f"Home Assistant device: {device_link(ha, new[0])}")
-                break
-            time.sleep(2)
-        else:
-            print("Home Assistant has not added the device yet; it appears under "
-                  "Settings > Devices & services > Matter shortly.")
-        print("\nYou can now disconnect USB and connect the battery. Never connect both.")
-        return 0
+            return run_pairing(args, ha, device, dataset, qr, has_commands, before, True)
+        finally:
+            addon.restore()
     finally:
         ha.close()
+
+
+def run_pairing(args, ha, device, dataset, qr, has_commands, before, dcl_turned_on):
+    tlv = (ha.call("thread/get_dataset_tlv", dataset_id=dataset["dataset_id"])["tlv"]
+           if dataset else None)
+    # From here on the device's pairing events are shown as they arrive.
+    device.start()
+    if has_commands:
+        start_pairing_mode(device)
+    else:
+        print("  (This firmware has no serial commands. If it stopped advertising, press "
+              "a switch to restart pairing mode.)")
+
+    if args.bluetooth:
+        if tlv:
+            ha.call("matter/set_thread", thread_operation_dataset=tlv)
+            print("Gave the Matter server the Thread network.")
+        print("Home Assistant is pairing the device over Bluetooth. This can take a few "
+              "minutes.\n", flush=True)
+    else:
+        give_thread_network(device, tlv)
+        print("Gave the device the Thread network over USB. Waiting for it to join...",
+              flush=True)
+        wait_until_on_network(device, args.join_timeout)
+        print("Home Assistant is pairing the device over the network. This can take a "
+              "minute or two.\n", flush=True)
+
+    started = time.monotonic()
+    try:
+        ha.call("matter/commission", wait=COMMISSION_TIMEOUT, code=qr,
+                network_only=not args.bluetooth)
+        error = None
+    except Error as err:
+        error = err
+    # Let the device's last events arrive.
+    time.sleep(2)
+
+    print()
+    if error:
+        explain_failure(error, device.events, args.bluetooth, dcl_turned_on)
+        return 1
+    print(f"Paired in {time.monotonic() - started:.0f} s.")
+
+    for _ in range(15):
+        new = [d for i, d in matter_devices(ha).items() if i not in before]
+        if new:
+            print(f"Home Assistant device: {device_link(ha, new[0])}")
+            break
+        time.sleep(2)
+    else:
+        print("Home Assistant has not added the device yet; it appears under "
+              "Settings > Devices & services > Matter shortly.")
+    print("\nWhen this script has finished, you can disconnect USB and connect the "
+          "battery.\nNever connect both.")
+    return 0
 
 
 def device_link(ha, device):
@@ -548,8 +658,12 @@ def device_link(ha, device):
     return f"{name}, {ha.base_url}/config/devices/device/{device['id']}"
 
 
-def explain_failure(error, events, bluetooth):
+def explain_failure(error, events, bluetooth, dcl_turned_on=False):
     print(f"Pairing failed: {error}\n")
+    if dcl_turned_on and re.search(r"(?i)test-net DCL|test/development certificate", str(error)):
+        print("The Matter server still refused the test certificate, although the script had\n"
+              "turned its test-net DCL option on. Check the Matter Server add-on's log.")
+        return
     if re.search(r"(?i)test-net DCL|test/development certificate", str(error)):
         print("Home Assistant's Matter server refuses devices with Matter test certificates\n"
               "unless they are allowed, and this uncertified device uses them. To allow them:\n"
@@ -597,6 +711,9 @@ def main():
                         help="with --bluetooth: don't change the Matter server's Thread network")
     parser.add_argument("--join-timeout", type=float, default=120,
                         help="seconds to wait for the device to join Thread (default: 120)")
+    parser.add_argument("--keep-matter-settings", action="store_true",
+                        help="don't turn the Matter server's test-net DCL option on for the "
+                             "pairing (it must already be on)")
     parser.add_argument("--insecure", action="store_true",
                         help="don't verify the HTTPS certificate (self-signed certificates)")
     parser.add_argument("--serial-seconds", type=float, default=3.0,
