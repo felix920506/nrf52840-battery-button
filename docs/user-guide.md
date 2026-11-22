@@ -61,6 +61,17 @@ an uncertified test device using Matter development credentials; some
 ecosystems warn and allow setup, while others reject it or require extra
 developer configuration.
 
+**Home Assistant** refuses devices with test credentials unless its Matter
+server allows them. Pairing then fails after the device certificate is read,
+with "This device uses a test/development certificate". Before pairing, open
+*Settings → Add-ons → Matter Server → Configuration*, turn on the test-net DCL
+option, save, and restart the add-on. For a stand-alone python-matter-server,
+start it with `--enable-test-net-dcl`. Only do this for devices you trust:
+it lets Home Assistant add any device with Matter test credentials. You can
+turn it off again once the device is paired: it only matters while a device
+is added. [`tools/pair_home_assistant.py`](#pair-with-home-assistant-from-a-computer)
+does both for you.
+
 ### Pair with Home Assistant from a computer
 
 Instead of scanning the QR code with a phone, `tools/pair_home_assistant.py`
@@ -75,7 +86,13 @@ Home Assistant and the device; they are never printed.
 
 You need:
 
-- The Matter integration in Home Assistant.
+- The Matter integration in Home Assistant. The Matter server must accept
+  test certificates (see [Commissioning](#commissioning)): with the Matter
+  Server add-on, the script turns its test-net DCL option on for the pairing
+  and off again afterwards, after asking you. Each change restarts the add-on,
+  so your Matter devices are unavailable in Home Assistant for about a minute,
+  twice. `--keep-matter-settings` leaves the option alone. Without the
+  Supervisor (Home Assistant Container or Core), turn the option on yourself.
 - A Thread border router, with its network set as Home Assistant's preferred
   network (*Settings → Devices & services → Thread*), within range of the
   device. Use `--thread-network <name>` for a different network.
@@ -301,7 +318,9 @@ as well.
   [pairing diagnostics](#pairing-diagnostics-on-the-serial-port); press `S`
   for the current state.
 - **Controller rejects the device:** only Home Assistant has been tested.
-  Matter test credentials are not accepted by every ecosystem.
+  Matter test credentials are not accepted by every ecosystem. Home Assistant
+  needs the Matter server's test-net DCL option (see
+  [Commissioning](#commissioning)).
 - **Device does not join Thread:** confirm the controller has a working Thread
   border router and that the device is powered and in range. The `S` command
   shows the network the device was given and whether it is connected.
