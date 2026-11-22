@@ -175,6 +175,8 @@ time, at 115200 baud:
 Ask the user first for `P` (start pairing mode) and `X` (stop pairing mode).
 Never send `I` (prints the pairing code and QR code) or `F` (factory reset):
 if a factory reset is needed, explain what it erases and let the user do it.
+Never send `T` (gives the device a Thread network, including its key): to pair
+without Bluetooth, point the user to `tools/pair_home_assistant.py`.
 Send no other text to the port: every printable character is a key.
 
 To watch a new attempt, ask the user whether you may hold the port open while

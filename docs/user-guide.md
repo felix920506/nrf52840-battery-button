@@ -61,6 +61,58 @@ an uncertified test device using Matter development credentials; some
 ecosystems warn and allow setup, while others reject it or require extra
 developer configuration.
 
+### Pair with Home Assistant from a computer
+
+Instead of scanning the QR code with a phone, `tools/pair_home_assistant.py`
+pairs a device connected to your computer over USB directly with Home
+Assistant, without Bluetooth. It reads the pairing code from the serial port
+and gives the device Home Assistant's preferred Thread network over USB (the
+`T` command). Once the device has joined the network and registered with the
+border router, Home Assistant's Matter server commissions it over the network.
+The device's pairing events are shown as they happen, so if pairing fails you
+see which step failed. The pairing code and the Thread network key go only to
+Home Assistant and the device; they are never printed.
+
+You need:
+
+- The Matter integration in Home Assistant.
+- A Thread border router, with its network set as Home Assistant's preferred
+  network (*Settings → Devices & services → Thread*), within range of the
+  device. Use `--thread-network <name>` for a different network.
+- Home Assistant's Matter server must reach Thread devices through the border
+  router, as for any Thread device: same LAN, IPv6 enabled, no VLAN or
+  firewall between them.
+- Firmware with the `T` command (press `H` on the serial port to check).
+
+Create a long-lived access token for an administrator (your profile in Home
+Assistant, *Security* tab). Connect the board over USB without the battery,
+close any terminal that has its serial port open, then run:
+
+```sh
+HA_TOKEN=<token> python3 tools/pair_home_assistant.py --url http://homeassistant.local:8123
+```
+
+Without `HA_TOKEN`, the script asks for the token. It finds the device's port
+by its USB ID; choose one with `--port` if several are connected. Use
+`--insecure` for an HTTPS server with a self-signed certificate. When pairing
+succeeds, it prints a link to the device's page in Home Assistant. Without a
+clone of this repository, download `tools/pair_home_assistant.py` and
+`tools/triage.py` into the same folder. Only Python 3 is needed (on Windows,
+also `pip install pyserial`).
+
+The device keeps the Thread network even if pairing fails, and tries the
+same network on the next attempt. A factory reset removes it. While the
+network is set, pairing over Bluetooth with a different Thread network fails;
+factory reset the device first.
+
+With `--bluetooth`, Home Assistant pairs over Bluetooth instead, as a phone
+would. This also works with older firmware without the `T` command, but needs
+Bluetooth commissioning enabled in the Matter server (the Bluetooth option of
+the Matter Server add-on, or `--bluetooth-adapter` for a stand-alone
+python-matter-server) and its host's Bluetooth adapter within range of the
+device. It sets the Matter server's Thread network to the preferred one;
+`--keep-thread-network` keeps the current one.
+
 ### Pairing diagnostics on the serial port
 
 Smart home apps often report only "pairing failed". Keep the serial port open
@@ -107,6 +159,7 @@ Press a key in the terminal to run a command:
 | `D` | Diagnostics report for support: firmware, status and all pairing events, without the pairing code |
 | `P` | Start pairing mode (Bluetooth advertising), like pressing a switch |
 | `X` | Stop pairing mode |
+| `T` | Join a Thread network pasted as a hex dataset, to pair over the network instead of Bluetooth (see [Pair with Home Assistant from a computer](#pair-with-home-assistant-from-a-computer)) |
 | `I` | Show the pairing code and QR code again |
 | `F` | Factory reset; press `Y` to confirm |
 | `H` | Help |

@@ -28,7 +28,8 @@ boards/                       per-board pins and flash layout
 dev/                          development-only config overlays (see Testing on macOS)
 tools/                        provisioning with labels, BLE test client, SRP-to-mDNS bridge,
                               Thread dataset provisioning, agent triage (triage.py and its
-                              playbook)
+                              playbook), pairing with Home Assistant over USB
+                              (pair_home_assistant.py)
 sysbuild.cmake                builds battery_switch_app.uf2 (application only), firmware version
 .github/workflows/            builds the release UF2 files
 ```
