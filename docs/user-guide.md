@@ -83,15 +83,19 @@ pairing fails, the step where it stopped and what to check. For example:
 The failure explanations cover a wrong pairing code, a rejected device
 certificate, a controller without Thread credentials, a device that cannot
 join the Thread network, and a controller that cannot reach the device over
-Thread. The device keeps the last 16 events, so you can also open the port
-after a failed attempt and press `L`.
+Thread.
+
+The device keeps the pairing events since it started (about 70 events; the
+oldest are dropped first) and prints them all whenever a terminal opens the
+port, after the pairing code. Closing and reopening the terminal, or opening
+it only after a failed attempt, loses nothing.
 
 Press a key in the terminal to run a command:
 
 | Key | Command |
 |---|---|
 | `S` | Status: paired controllers (fabrics), pairing mode, last pairing attempt, Thread network, role and service registration with the border router |
-| `L` | Recent pairing events |
+| `L` | Pairing events again |
 | `P` | Start pairing mode (Bluetooth advertising), like pressing a switch |
 | `X` | Stop pairing mode |
 | `I` | Show the pairing code and QR code again |

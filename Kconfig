@@ -189,6 +189,17 @@ config APP_USB_INFO
 	  costs no current on battery. Not available with the USB console
 	  (usb-logging.conf), which logs the pairing code instead.
 
+config APP_USB_DIAG_LOG_SIZE
+	int "Pairing diagnostics history on the USB serial port [bytes]"
+	depends on APP_USB_INFO
+	default 4096
+	range 512 32768
+	help
+	  Pairing events since the device started are kept in RAM and printed
+	  whenever a terminal opens the USB serial port, so closing and
+	  reopening the terminal loses nothing. About 55 bytes per event;
+	  the oldest events are dropped when it is full.
+
 config APP_FACTORY_RESET_HOLD_MS
 	int "Reset pad: hold time for factory reset [ms]"
 	default 5000

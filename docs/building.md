@@ -42,7 +42,7 @@ v3.4.1:
 
 | Build | Flash | App partition | RAM |
 |---|---|---|---|
-| default (low power, USB pairing info and diagnostics) | 586 KB | 608 KB | 166 KB |
+| default (low power, USB pairing info and diagnostics) | 586 KB | 608 KB | 168 KB |
 | debug (no factory data, `dev/large-app.overlay`) | 625 KB | 788 KB | 161 KB |
 
 ## Flashing the XIAO over UF2
