@@ -70,6 +70,15 @@ jobs:
           # short commit hash (see sysbuild.cmake).
           fetch-depth: 0
 
+      # Same rule as sysbuild.cmake: the tag if HEAD is tagged, otherwise the
+      # short commit hash. Goes into the file names, so "/" in a tag becomes
+      # "-".
+      - name: Firmware version
+        working-directory: ws/nrf52840-battery-button
+        run: |
+          version=$(git describe --tags --exact-match HEAD 2>/dev/null || git rev-parse --short HEAD)
+          echo "FW_VERSION=${version//\//-}" >> "$GITHUB_ENV"
+
       - name: Install nrfutil and the nRF Connect SDK toolchain
         run: |
           mkdir -p ~/.local/bin
@@ -108,7 +117,7 @@ jobs:
           nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
             west build -b "${{ matrix.board }}" --sysbuild -d build
           mkdir -p out
-          cp build/battery_switch_app.uf2 "out/battery-switch-${{ matrix.name }}.uf2"
+          cp build/battery_switch_app.uf2 "out/battery-switch-${{ matrix.name }}-$FW_VERSION.uf2"
 
       # Erases the factory data page, so a device creates a new pairing code.
       # Same address on every UF2 board, so one file serves all of them.
@@ -117,7 +126,7 @@ jobs:
         working-directory: ws/nrf52840-battery-button
         run: |
           nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VERSION" -- \
-            python3 tools/provision_device.py --build-dir build --blank out/new-pairing-code.uf2
+            python3 tools/provision_device.py --build-dir build --blank "out/new-pairing-code-$FW_VERSION.uf2"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -136,9 +145,15 @@ jobs:
           path: out
           merge-multiple: true
 
+      # If the release already exists (say, a draft published by hand, which
+      # is what pushed the tag), attach the files to it instead of failing.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" \
-            --title "$GITHUB_REF_NAME" --generate-notes
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" \
+              --title "$GITHUB_REF_NAME" --generate-notes
+          fi

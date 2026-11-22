@@ -42,7 +42,7 @@ v3.4.1:
 
 | Build | Flash | App partition | RAM |
 |---|---|---|---|
-| default (low power, USB pairing info) | 577 KB | 608 KB | 164 KB |
+| default (low power, USB pairing info and diagnostics) | 586 KB | 608 KB | 168 KB |
 | debug (no factory data, `dev/large-app.overlay`) | 625 KB | 788 KB | 161 KB |
 
 ## Flashing the XIAO over UF2
@@ -158,7 +158,7 @@ with an erased pairing code page instead:
 tools/provision_device.py --build-dir build-dongle --blank-hex new-code.hex
 ```
 
-The UF2 `new-pairing-code.uf2` from the release doesn't work on the Dongle.
+The UF2 `new-pairing-code-<version>.uf2` from the release doesn't work on the Dongle.
 
 Out of the box, the Dongle uses USB 5 V and high-voltage mode. For AAA or
 CR2032 battery power on VDD, change the solder bridges as described in the
@@ -239,9 +239,10 @@ python3 tools/provision_device.py --build-dir build \
   --from-device build/devices/<serial>
 ```
 
-The same tool builds `new-pairing-code.uf2`, the release file that erases the
-factory data page so the firmware creates a new code on the next boot
-(`--blank-hex` produces the HEX equivalent for the Dongle):
+The same tool builds `new-pairing-code.uf2` (released as
+`new-pairing-code-<version>.uf2`), the file that erases the factory data page
+so the firmware creates a new code on the next boot (`--blank-hex` produces the
+HEX equivalent for the Dongle):
 
 ```sh
 python3 tools/provision_device.py --build-dir build --blank new-pairing-code.uf2
@@ -254,7 +255,9 @@ the UF2 files for the XIAO, the Feather nRF52840 and the Pro Micro nRF52840 on
 every push and pull request; they can be downloaded from the run's artifacts.
 Each board builds on its own runner, in parallel. Pushing a tag also publishes
 them, together with `new-pairing-code.uf2`, as a GitHub release named after
-the tag:
+the tag. The file names end in the tag
+(`battery-switch-xiao-nrf52840-v1.0.0.uf2`), or in the short commit hash for
+builds of untagged commits:
 
 ```sh
 git tag v1.0.0

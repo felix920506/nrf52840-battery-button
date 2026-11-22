@@ -85,6 +85,8 @@ static void show_pairing_info(void)
 	struct transport_pairing_info info = { 0 };
 
 	transport_get_pairing_info(&info);
+	printk("Firmware %s, hardware %s (%s)\n", CONFIG_APP_FIRMWARE_VERSION, APP_BOARD_NAME,
+	       CONFIG_BOARD_TARGET);
 	printk("Serial number %s, pairing code %s, QR code %s\n", info.serial, info.code, info.qr);
 #endif
 }
@@ -166,7 +168,7 @@ int main(void)
 	}
 
 #ifdef CONFIG_APP_USB_INFO
-	err = usb_info_init();
+	err = usb_info_init(factory_reset);
 	if (err) {
 		LOG_WRN("USB init failed (%d)", err);
 	}
@@ -203,6 +205,14 @@ int main(void)
 		case APP_EVT_USB_TERMINAL:
 			show_pairing_info();
 			break;
+#ifdef CONFIG_APP_USB_INFO
+		case APP_EVT_USB_KEY:
+			usb_info_key();
+			break;
+		case APP_EVT_USB_DIAG:
+			usb_info_flush();
+			break;
+#endif
 		default:
 			break;
 		}
