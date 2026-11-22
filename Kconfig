@@ -178,6 +178,14 @@ config APP_PRODUCT_NAME
 	string "Product name shown on the USB serial port"
 	default "Battery Switch"
 
+config APP_FIRMWARE_VERSION
+	string "Firmware version shown on the USB serial port"
+	default "unknown"
+	help
+	  Set by sysbuild.cmake from git: the tag if HEAD is tagged,
+	  otherwise the short commit hash. Matter controllers get the same
+	  value as the software version string.
+
 config APP_USB_INFO
 	bool "Show the pairing code on the USB serial port"
 	depends on USBD_CDC_ACM_CLASS && UART_LINE_CTRL

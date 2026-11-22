@@ -148,6 +148,8 @@ static void put_pairing_info(void)
 	transport_get_pairing_info(&info);
 
 	put("\r\n" CONFIG_APP_PRODUCT_NAME "\r\n");
+	put("Firmware: " CONFIG_APP_FIRMWARE_VERSION "\r\n");
+	put("Hardware: " APP_BOARD_NAME " (" CONFIG_BOARD_TARGET ")\r\n");
 	if (info.serial[0]) {
 		put("Serial number: ");
 		put(info.serial);

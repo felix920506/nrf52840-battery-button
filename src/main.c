@@ -85,6 +85,8 @@ static void show_pairing_info(void)
 	struct transport_pairing_info info = { 0 };
 
 	transport_get_pairing_info(&info);
+	printk("Firmware %s, hardware %s (%s)\n", CONFIG_APP_FIRMWARE_VERSION, APP_BOARD_NAME,
+	       CONFIG_BOARD_TARGET);
 	printk("Serial number %s, pairing code %s, QR code %s\n", info.serial, info.code, info.qr);
 #endif
 }

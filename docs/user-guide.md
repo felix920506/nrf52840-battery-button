@@ -188,7 +188,15 @@ code.
 Your controller shows the installed firmware version on the device page (Home
 Assistant: *Firmware*): the release tag, or the commit hash for a build that
 isn't a release. The hardware version shows the board the firmware was built
-for.
+for. The USB serial port shows both at the top when a terminal opens it, so
+you can check them before pairing, for example after step 4:
+
+```text
+Battery Switch
+Firmware: v1.0.0
+Hardware: Seeed XIAO nRF52840 (xiao_ble/nrf52840)
+Serial number: ...
+```
 
 ## Factory reset and pairing code
 

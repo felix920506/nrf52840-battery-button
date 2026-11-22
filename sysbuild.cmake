@@ -9,8 +9,8 @@
 # this file leave the factory data page, and so the pairing code, untouched.
 #
 
-# Software version shown by Matter controllers: the tag if HEAD is tagged,
-# otherwise the short commit hash.
+# Firmware version shown by Matter controllers and on the USB serial port:
+# the tag if HEAD is tagged, otherwise the short commit hash.
 find_package(Git QUIET)
 if(GIT_FOUND)
   execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --exact-match HEAD
@@ -23,6 +23,7 @@ if(GIT_FOUND)
   endif()
   if(fw_version)
     set_config_string(${DEFAULT_IMAGE} CONFIG_CHIP_DEVICE_SOFTWARE_VERSION_STRING "${fw_version}")
+    set_config_string(${DEFAULT_IMAGE} CONFIG_APP_FIRMWARE_VERSION "${fw_version}")
   endif()
 
   # Configure again when HEAD moves or tags change.
