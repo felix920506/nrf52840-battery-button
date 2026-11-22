@@ -52,6 +52,7 @@
 #include <platform/DiagnosticDataProvider.h>
 #include <platform/ThreadStackManager.h>
 #include <platform/nrfconnect/FactoryDataProvider.h>
+#include <lib/support/ThreadOperationalDataset.h>
 #include <setup_payload/OnboardingCodesUtil.h>
 
 #include <openthread/dataset.h>
@@ -805,6 +806,55 @@ void transport_start_pairing(void)
 	if (err != CHIP_NO_ERROR) {
 		LOG_ERR("OpenBasicCommissioningWindow failed: %" CHIP_ERROR_FORMAT, err.Format());
 	}
+}
+
+/*
+ * The Thread network for pairing over the network (e.g. from Home Assistant
+ * with tools/pair_home_assistant.py, without Bluetooth). Once attached, the
+ * device registers its commissionable service with the border router (SRP),
+ * which the controller finds over mDNS. The dataset is stored like one a
+ * controller sends; a factory reset erases it.
+ */
+int transport_join_network(const uint8_t *credentials, size_t len)
+{
+	Thread::OperationalDataset dataset;
+	char name[Thread::kSizeNetworkName + 1] = "";
+	uint16_t channel = 0;
+	uint16_t panId = 0;
+
+	if (dataset.Init(ByteSpan(credentials, len)) != CHIP_NO_ERROR || !dataset.IsCommissioned() ||
+	    dataset.GetChannel(channel) != CHIP_NO_ERROR || dataset.GetPanId(panId) != CHIP_NO_ERROR) {
+		return -EINVAL;
+	}
+	(void)dataset.GetNetworkName(name);
+
+	StackLock lock;
+
+	if (Server::GetInstance().GetFabricTable().FabricCount() != 0) {
+		return -EALREADY;
+	}
+
+	CHIP_ERROR err = ThreadStackMgrImpl().AttachToThreadNetwork(dataset, nullptr);
+	if (err == CHIP_NO_ERROR && !ThreadStackMgrImpl().IsThreadEnabled()) {
+		/* Same dataset as before: attaching was skipped, but Thread may be off. */
+		err = ThreadStackMgrImpl().SetThreadEnabled(true);
+	}
+	if (err != CHIP_NO_ERROR) {
+		LOG_ERR("AttachToThreadNetwork failed: %" CHIP_ERROR_FORMAT, err.Format());
+		return -EIO;
+	}
+	diag_event("Thread network \"%s\" (channel %u, PAN ID 0x%04x) received over USB, joining it",
+		   name, channel, panId);
+
+	auto &windowManager = Server::GetInstance().GetCommissioningWindowManager();
+
+	if (!windowManager.IsCommissioningWindowOpen()) {
+		err = windowManager.OpenBasicCommissioningWindow();
+		if (err != CHIP_NO_ERROR) {
+			LOG_ERR("OpenBasicCommissioningWindow failed: %" CHIP_ERROR_FORMAT, err.Format());
+		}
+	}
+	return 0;
 }
 
 void transport_stop_pairing(void)

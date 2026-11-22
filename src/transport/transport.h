@@ -21,6 +21,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "core/battery.h"
@@ -55,6 +56,15 @@ bool transport_is_provisioned(void);
 
 /* Make the device discoverable for commissioning/pairing, if it is not already. */
 void transport_start_pairing(void);
+
+/*
+ * Join a network with credentials given over USB, so that a controller can
+ * pair the device over that network instead of Bluetooth. Also starts
+ * pairing mode. Only while not provisioned. Returns 0, -EALREADY if the
+ * device is provisioned, -EINVAL if the credentials are not valid, or
+ * another negative errno. Progress is reported with diag_event().
+ */
+int transport_join_network(const uint8_t *credentials, size_t len);
 
 /* Stop being discoverable for pairing. */
 void transport_stop_pairing(void);

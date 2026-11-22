@@ -235,6 +235,9 @@ int main(void)
 		case APP_EVT_USB_KEY:
 			usb_info_key();
 			break;
+		case APP_EVT_USB_LINE:
+			usb_info_line();
+			break;
 		case APP_EVT_USB_DIAG:
 			usb_info_flush();
 			break;

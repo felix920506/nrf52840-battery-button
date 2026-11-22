@@ -64,6 +64,9 @@ this is an uncertified Matter test device, and some ecosystems may reject it.
 4. In your Matter controller, scan the QR code or enter the pairing code. The
    controller setup needs access to a Thread border router. Pairing can be done
    while the board is powered over USB.
+   With Home Assistant, [`tools/pair_home_assistant.py`](docs/user-guide.md#pair-with-home-assistant-from-a-computer)
+   can instead pair the connected board from your computer, over the Thread
+   network without Bluetooth, with an access token.
 
 5. Disconnect USB, then connect the battery. **Battery positive goes to 3V3,
    not BAT or 5V; never connect USB and a battery at the same time.** See the

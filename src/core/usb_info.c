@@ -10,6 +10,10 @@
  * show the status, start or stop pairing mode, factory reset. Smart home
  * apps often report only "pairing failed"; this shows which step failed.
  *
+ * One command reads a line instead of a key: T takes a Thread dataset (hex),
+ * so that a controller can pair the device over the network instead of
+ * Bluetooth (tools/pair_home_assistant.py).
+ *
  * The history survives a crash or a factory reset (but not a power cycle),
  * so the events that led up to it can still be read afterwards.
  *
@@ -63,6 +67,11 @@ LOG_MODULE_REGISTER(usb_info, CONFIG_LOG_DEFAULT_LEVEL);
 /* How long the factory reset command waits for its confirmation. */
 #define RESET_CONFIRM_MS 10000
 
+/* Hex digits of the longest Thread operational dataset (254 bytes). */
+#define LINE_MAX 508
+
+#define KEY_ESC 0x1b
+
 /* Marks a history kept for the next start (usb_info_retain()). */
 #define RETAIN_MAGIC 0x44494147 /* "DIAG" */
 
@@ -80,6 +89,18 @@ static atomic_t terminal_open;
 static atomic_t pending_key;
 /* APP_EVT_USB_DIAG has been posted and not handled yet. */
 static atomic_t flush_pending;
+
+/*
+ * Set while the T command reads its line: received characters go into
+ * line_buf instead of pending_key. Cleared by the receive callback when the
+ * line ends (then APP_EVT_USB_LINE is posted), so line_buf is only touched
+ * by one side at a time.
+ */
+static atomic_t line_mode;
+static char line_buf[LINE_MAX];
+static size_t line_len;
+static bool line_overflow;
+static bool line_cancelled;
 
 static void (*factory_reset_cb)(void);
 static int64_t reset_requested_at = -1;
@@ -206,6 +227,7 @@ static void put_help(void)
 	    "  D  diagnostics report for support (no pairing code)\r\n"
 	    "  P  start pairing mode (Bluetooth advertising)\r\n"
 	    "  X  stop pairing mode\r\n"
+	    "  T  join a Thread network given here, to pair without Bluetooth\r\n"
 	    "  I  show the pairing code and QR code again\r\n"
 	    "  F  factory reset (asks for confirmation)\r\n"
 	    "  H  this help\r\n\r\n");
@@ -464,6 +486,83 @@ static void stop_pairing(void)
 	transport_stop_pairing();
 }
 
+static void read_dataset(void)
+{
+	if (transport_is_provisioned()) {
+		put("The device is already paired. To pair it with a different controller,\r\n"
+		    "remove it in the app it is paired with, or factory reset it (F).\r\n\r\n");
+		return;
+	}
+	put("Paste the Thread network's active dataset in hex (on an OpenThread border\r\n"
+	    "router: ot-ctl dataset active -x), then press Enter. It is not shown.\r\n"
+	    "Esc cancels. tools/pair_home_assistant.py does this for you.\r\n");
+	line_len = 0;
+	line_overflow = false;
+	line_cancelled = false;
+	atomic_set(&line_mode, 1);
+}
+
+static int hex_value(char c)
+{
+	if (c >= '0' && c <= '9') {
+		return c - '0';
+	}
+	c = (char)tolower((int)c);
+	return c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
+}
+
+void usb_info_line(void)
+{
+	static uint8_t dataset[LINE_MAX / 2];
+	size_t len = 0;
+	bool valid = !line_overflow && line_len > 0 && line_len % 2 == 0;
+	int err;
+
+	if (line_cancelled || atomic_get(&line_mode)) {
+		put("Cancelled.\r\n\r\n");
+		goto out;
+	}
+	for (size_t i = 0; valid && i < line_len; i += 2) {
+		int hi = hex_value(line_buf[i]);
+		int lo = hex_value(line_buf[i + 1]);
+
+		valid = hi >= 0 && lo >= 0;
+		dataset[len++] = (uint8_t)(hi << 4 | lo);
+	}
+	if (!valid) {
+		put("That is not a Thread dataset in hex. Nothing was changed.\r\n\r\n");
+		goto out;
+	}
+
+	err = transport_join_network(dataset, len);
+	switch (err) {
+	case 0:
+		put("Thread network set. The device joins it, then a controller on the same\r\n"
+		    "network can pair it over the network while pairing mode is on. S shows\r\n"
+		    "the progress; a factory reset (F) removes the network again.\r\n\r\n");
+		break;
+	case -EINVAL:
+		put("That is not a complete Thread dataset (it needs the network key, channel\r\n"
+		    "and PAN ID). Nothing was changed.\r\n\r\n");
+		break;
+	case -EALREADY:
+		put("The device is already paired. Nothing was changed.\r\n\r\n");
+		break;
+	case -ENOTSUP:
+		put("This firmware has no network to join.\r\n\r\n");
+		break;
+	default:
+		usb_info_printf("Could not set the Thread network (error %d).\r\n", err);
+		break;
+	}
+
+out:
+	/* The dataset holds the network key. */
+	memset(dataset, 0, sizeof(dataset));
+	memset(line_buf, 0, sizeof(line_buf));
+	line_len = 0;
+}
+
 void usb_info_key(void)
 {
 	int c = toupper((int)atomic_set(&pending_key, 0));
@@ -507,6 +606,9 @@ void usb_info_key(void)
 	case 'X':
 		stop_pairing();
 		break;
+	case 'T':
+		read_dataset();
+		break;
 	case 'I':
 		put_pairing_info();
 		break;
@@ -526,6 +628,28 @@ void usb_info_key(void)
 	}
 }
 
+/* A character of the T command's line. Receive callback only. */
+static void line_char(uint8_t c)
+{
+	bool end = c == KEY_ESC;
+
+	if (c == '\r' || c == '\n') {
+		/* Ignore the line ending of the T key itself ("T\r\n"). */
+		end = line_len > 0 || line_overflow;
+	} else if (c > ' ' && c < 0x7f) {
+		if (line_len < sizeof(line_buf)) {
+			line_buf[line_len++] = (char)c;
+		} else {
+			line_overflow = true;
+		}
+	}
+	if (end) {
+		line_cancelled = c == KEY_ESC;
+		atomic_clear(&line_mode);
+		(void)app_loop_post(APP_EVT_USB_LINE, 0, 0);
+	}
+}
+
 /* Runs in the CDC ACM driver's work queue: keep the newest key for the application loop. */
 static void uart_rx(const struct device *dev, void *user_data)
 {
@@ -538,6 +662,10 @@ static void uart_rx(const struct device *dev, void *user_data)
 
 	while (uart_irq_rx_ready(dev) && (len = uart_fifo_read(dev, buf, sizeof(buf))) > 0) {
 		for (int i = 0; i < len; i++) {
+			if (atomic_get(&line_mode)) {
+				line_char(buf[i]);
+				continue;
+			}
 			/* Ignore line endings and other control characters. */
 			if (buf[i] <= ' ' || buf[i] >= 0x7f) {
 				continue;
@@ -573,6 +701,11 @@ static void usb_msg(struct usbd_context *const ctx, const struct usbd_msg *msg)
 			app_loop_post(APP_EVT_USB_TERMINAL, 0, 0);
 		} else if (!dtr) {
 			atomic_clear(&terminal_open);
+			/* Drop a half-entered dataset: the next terminal starts with keys. */
+			if (atomic_cas(&line_mode, 1, 0)) {
+				line_cancelled = true;
+				(void)app_loop_post(APP_EVT_USB_LINE, 0, 0);
+			}
 		}
 		break;
 	default:
