@@ -588,9 +588,10 @@ def pair_device(args, token, port, device):
             return run_pairing(args, ha, device, dataset, qr, has_commands, before, False)
         print("Turning the Matter server's test-net DCL option on (restarts it)...",
               flush=True)
-        addon.set(True)
-        print("  Done.")
         try:
+            # Inside the try: a failed or interrupted restart still restores the option.
+            addon.set(True)
+            print("  Done.")
             return run_pairing(args, ha, device, dataset, qr, has_commands, before, True)
         finally:
             addon.restore()
