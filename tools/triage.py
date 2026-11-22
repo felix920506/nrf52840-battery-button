@@ -151,71 +151,131 @@ def describe_usb(vid, pid):
     return f"{vid:04x}:{pid:04x}, {label}"
 
 
-def read_serial(device, seconds):
-    """Opens the port at 115200 baud with DTR set, which makes the firmware
-    print its pairing banner, and returns what arrived. Never 1200 baud: on
-    usb-logging builds that reboots the board into the bootloader."""
-    try:
-        import serial
-    except ImportError:
-        serial = None
-    data = b""
-    if serial is not None:
+class Port:
+    """The device's serial port at 115200 baud with DTR set. Never 1200 baud:
+    on usb-logging builds, that reboots the board into the bootloader."""
+
+    def __init__(self, device):
         try:
-            with serial.Serial(device, 115200, timeout=0.2) as port:
-                # pyserial empties the input buffer after opening, which
-                # can drop the start of the banner: drop DTR and set it again
-                # so the firmware prints it once more.
-                port.dtr = False
-                time.sleep(0.3)
-                port.reset_input_buffer()
-                port.dtr = True
-                end = time.monotonic() + seconds
-                while time.monotonic() < end:
-                    data += port.read(4096)
-        except (OSError, serial.SerialException) as err:
-            return None, f"could not open: {err}"
-        return data.decode(errors="replace"), None
-    if os.name != "posix":
-        return None, "not read: install pyserial to read serial ports on this OS"
+            import serial
+        except ImportError:
+            serial = None
+        self.serial = None
+        self.fd = None
+        if serial is not None:
+            try:
+                self.serial = serial.Serial(device, 115200, timeout=0.1)
+            except (OSError, serial.SerialException) as err:
+                raise OSError(f"could not open: {err}") from err
+            # pyserial empties the input buffer after opening, which can drop
+            # the start of the banner: drop DTR and set it again so the
+            # firmware prints it once more.
+            self.serial.dtr = False
+            time.sleep(0.3)
+            self.serial.reset_input_buffer()
+            self.serial.dtr = True
+            return
+        if os.name != "posix":
+            raise OSError("not read: install pyserial to read serial ports on this OS")
 
-    import fcntl
-    import select
-    import struct
-    import termios
-    import tty
+        import fcntl
+        import struct
+        import termios
+        import tty
 
-    try:
-        fd = os.open(device, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
-    except OSError as err:
-        return None, f"could not open: {err}"
-    try:
-        tty.setraw(fd)
-        attrs = termios.tcgetattr(fd)
-        attrs[4] = attrs[5] = termios.B115200
-        termios.tcsetattr(fd, termios.TCSANOW, attrs)
-        # As above: set DTR again so the whole banner arrives after this point.
-        dtr = struct.pack("I", termios.TIOCM_DTR)
-        fcntl.ioctl(fd, termios.TIOCMBIC, dtr)
-        time.sleep(0.3)
-        termios.tcflush(fd, termios.TCIFLUSH)
-        fcntl.ioctl(fd, termios.TIOCMBIS, dtr)
+        self.fd = os.open(device, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        try:
+            tty.setraw(self.fd)
+            attrs = termios.tcgetattr(self.fd)
+            attrs[4] = attrs[5] = termios.B115200
+            termios.tcsetattr(self.fd, termios.TCSANOW, attrs)
+            # As above: set DTR again so the whole banner arrives after this point.
+            dtr = struct.pack("I", termios.TIOCM_DTR)
+            fcntl.ioctl(self.fd, termios.TIOCMBIC, dtr)
+            time.sleep(0.3)
+            termios.tcflush(self.fd, termios.TCIFLUSH)
+            fcntl.ioctl(self.fd, termios.TIOCMBIS, dtr)
+        except OSError:
+            self.close()
+            raise
+
+    def _read(self, wait):
+        if self.serial is not None:
+            return self.serial.read(4096)
+        import select
+
+        ready, _, _ = select.select([self.fd], [], [], wait)
+        if not ready:
+            return b""
+        try:
+            return os.read(self.fd, 4096)
+        except BlockingIOError:
+            return b""
+
+    def read(self, seconds, until=None, quiet=None):
+        """Reads for `seconds`, or until the text `until` arrived, or until
+        nothing arrived for `quiet` seconds after something did."""
+        data = b""
         end = time.monotonic() + seconds
+        last = None
         while (left := end - time.monotonic()) > 0:
-            ready, _, _ = select.select([fd], [], [], left)
-            if ready:
-                try:
-                    chunk = os.read(fd, 4096)
-                except BlockingIOError:
-                    continue
-                if not chunk:
-                    break
+            chunk = self._read(min(left, 0.1))
+            now = time.monotonic()
+            if chunk:
                 data += chunk
+                last = now
+                if until and until.encode() in data:
+                    break
+            elif quiet and last and now - last >= quiet:
+                break
+        return data.decode(errors="replace")
+
+    def send(self, key):
+        if self.serial is not None:
+            self.serial.write(key.encode())
+        else:
+            os.write(self.fd, key.encode())
+
+    def close(self):
+        if self.serial is not None:
+            self.serial.close()
+        elif self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+
+
+REPORT_END = "--- END DIAGNOSTICS ---"
+
+
+def read_device(device, seconds):
+    """Returns (banner, report, error). The banner is what the firmware
+    prints when the port opens. The report is the output of the read-only
+    D command, or of S and L on firmware without it. No other key is ever
+    sent: other keys start or stop pairing mode, show the pairing code, or
+    begin a factory reset."""
+    try:
+        port = Port(device)
     except OSError as err:
-        return None, f"read failed: {err}"
+        return None, None, str(err)
+    try:
+        banner = port.read(seconds, quiet=1.0)
+        # Firmware from before the pairing console prints a banner without
+        # this and ignores keys. No banner at all: another terminal probably
+        # has the port open, so the firmware didn't print it again.
+        if banner.strip() and "Press H for commands" not in banner:
+            return banner, None, None
+        port.send("D")
+        report = port.read(8, until=REPORT_END, quiet=1.5)
+        if "Unknown command" in report:
+            report = ""
+            for key in ("S", "L"):
+                port.send(key)
+                report += port.read(5, quiet=1.0)
+        return banner, report, None
+    except OSError as err:
+        return None, None, f"read failed: {err}"
     finally:
-        os.close(fd)
-    return data.decode(errors="replace"), None
+        port.close()
 
 
 def summarize_serial(text):
@@ -228,7 +288,7 @@ def summarize_serial(text):
         if line.strip():
             lines.append(redact(line))
     status = next((l.split(":", 1)[1].strip() for l in lines if l.startswith("Status:")), None)
-    return status, lines[-80:]
+    return status, lines[-400:]
 
 
 # --- UF2 bootloader drives -------------------------------------------------
@@ -326,14 +386,24 @@ def build_context(args, paths):
     ours = [p for p in ports if (p[1], p[2]) == (0x2FE3, 0x0004)]
     if ours and not args.no_serial:
         for device, *_ in ours:
-            text, error = read_serial(device, args.serial_seconds)
-            out += ["", f"### Output of {device} ({args.serial_seconds:g} s after opening)", ""]
-            if text is None:
+            banner, report, error = read_device(device, args.serial_seconds)
+            out += ["", f"### {device}", ""]
+            if error:
                 out.append(f"- {error}")
                 continue
-            status, lines = summarize_serial(text)
+            status, banner_lines = summarize_serial(banner or "")
             out.append(f"- Pairing status: {status or 'not printed'}")
-            out += ["", "```text"] + (lines or ["(nothing received)"]) + ["```"]
+            if report and report.strip():
+                # The report has the firmware, status and full event history.
+                _, report_lines = summarize_serial(report)
+                out += ["", "Diagnostics read from the device (read-only command):", "",
+                        "```text"] + report_lines + ["```"]
+            else:
+                if not banner_lines:
+                    out.append("- Nothing received. Another program may have the port open.")
+                else:
+                    out.append("- This firmware has no diagnostics command; banner only.")
+                out += ["", "```text"] + (banner_lines or ["(nothing received)"]) + ["```"]
     elif ours:
         out += ["", "The device's serial port was not read (--no-serial)."]
 
@@ -353,9 +423,10 @@ def build_context(args, paths):
         "",
         "## Not known from this computer",
         "",
-        "- The firmware version: the device does not print it over USB. Home",
+        "- The firmware version, if no device output is shown above: Home",
         "  Assistant shows it on the device page (Firmware); the hardware version",
-        "  there is the board the firmware was built for.",
+        "  there is the board the firmware was built for. Newer firmware prints",
+        "  both on the serial port.",
         "- Anything about the Matter controller or the Thread border router.",
     ]
     return "\n".join(out) + "\n"

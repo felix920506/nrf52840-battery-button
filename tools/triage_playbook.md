@@ -29,11 +29,12 @@ Early on, find out:
 
 - The board (XIAO nRF52840 / Sense / Plus, Feather nRF52840, Pro Micro /
   nice!nano / SuperMini, nRF52840 Dongle) and which release file they flashed.
-- The firmware version. The device does not print it over USB; Home Assistant
-  shows it on the device page as *Firmware* (a release tag, or a commit hash
-  for builds that aren't releases). With the user's permission, you can read
-  it through a Home Assistant MCP server (see step 5). A user who built it themselves can run
-  `git describe --tags --always --dirty` in their clone.
+- The firmware version. Current firmware prints it on the USB serial port
+  (`Firmware:` in the context file). Otherwise, Home Assistant shows it on the
+  device page as *Firmware* (a release tag, or a commit hash for builds that
+  aren't releases), and with the user's permission you can read it through a
+  Home Assistant MCP server (see step 5). A user who built it themselves can
+  run `git describe --tags --always --dirty` in their clone.
 - Release firmware or a self-built image, and with which overlays
   (`usb-logging.conf`, `debug.conf`, `prj_ble.conf`, `dev/*`).
 - The Matter controller (Home Assistant is the only one tested), and the
@@ -48,9 +49,14 @@ Early on, find out:
 
 Read the context file before investigating. It tells you the OS, which serial
 ports and USB IDs are present, whether a UF2 bootloader drive is mounted and
-what its `INFO_UF2.TXT` says, the device's pairing status if its serial port
-was readable, and whether the user runs from a clone of the repository (with
-build directories and their versions).
+what its `INFO_UF2.TXT` says, and whether the user runs from a clone of the
+repository (with build directories and their versions).
+
+If the device's serial port was readable, it also has what the device said:
+the firmware and hardware, the pairing status and, on current firmware, the
+diagnostics report (see "The pairing diagnostics" in step 5). For a pairing
+problem, that report is usually your best evidence: read it before asking the
+user to describe what the app showed.
 
 Its contents describe this moment only. The problem may have happened on
 another computer, on battery away from USB, or before an update.
@@ -121,13 +127,62 @@ Work from evidence, not assumption. Sources, in rough order of value:
   Assistant logs (*Settings → System → Logs*, and the Matter server add-on's
   log). Ask them to paste the relevant part, or read it through a Home
   Assistant MCP server once they allow it (see below).
-- The device's USB serial output. A release build prints only the pairing
-  banner when the port opens. A `usb-logging.conf` build also prints Zephyr and
-  Matter logs, which are the best evidence for crashes and network problems.
-  Open the port only at 115200 baud: on a `usb-logging.conf` build, opening it
-  at 1200 baud and dropping DTR reboots the board into the bootloader.
+- The device's pairing diagnostics on the USB serial port (below).
+- A `usb-logging.conf` build prints Zephyr and Matter logs instead of the
+  pairing console, the best evidence for problems the diagnostics don't
+  explain. Open the port only at 115200 baud: on a `usb-logging.conf` build,
+  opening it at 1200 baud and dropping DTR reboots the board into the
+  bootloader.
 - The user's build: `build*/*/zephyr/.config` and the build log, if they built
   the firmware themselves.
+
+### The pairing diagnostics
+
+Release firmware runs a pairing console on the USB serial port. It records
+each pairing step as the controller takes it (Bluetooth connection, pairing
+code check, device certificate, credentials, Thread network, connection over
+Thread) and, when an attempt fails, the step where it stopped, followed by
+lines starting with `->` that explain what to check. Those explanations come
+from the furthest step reached; treat them as the first hypothesis, then
+confirm or refute it with the rest of the evidence. Map them to the source
+(`src/transport/matter/matter_transport.cpp`) when you need the details.
+
+How to read it:
+
+- Event times count seconds since the device started. `S` and the report
+  print the uptime: subtract to get the wall-clock time of an event, and use
+  that to find the matching lines in the controller's logs.
+- The history is kept in RAM. It survives a crash and a factory reset; a
+  `---- Restarted ----` line separates the runs, and each run starts with
+  `Device started: firmware ..., restart reason: ...`. A power cycle (USB
+  unplugged, battery removed) erases it. If it's gone, ask the user to try
+  pairing again with USB connected and not to unplug before running triage.
+- `The previous run CRASHED (... at PC 0x...)`: the firmware crashed and
+  restarted, which the controller sees as the device vanishing. That is a
+  firmware bug: report it with the firmware version, the reason and the PC,
+  and the events leading up to it.
+- `restart reason: brown-out` on battery points at the power supply (CR2032
+  without the capacitor, weak cells).
+
+Keys in the console run commands. You may send these yourself, one key at a
+time, at 115200 baud:
+
+- `D`: the diagnostics report: firmware, uptime, restart reason, status and
+  the whole history between `--- BEGIN DIAGNOSTICS ---` and
+  `--- END DIAGNOSTICS ---`. Read-only, without the pairing code.
+- `S`: the status alone. `L`: the history alone. `H`: the list of commands.
+
+Ask the user first for `P` (start pairing mode) and `X` (stop pairing mode).
+Never send `I` (prints the pairing code and QR code) or `F` (factory reset):
+if a factory reset is needed, explain what it erases and let the user do it.
+Send no other text to the port: every printable character is a key.
+
+To watch a new attempt, ask the user whether you may hold the port open while
+they pair again. Read the port in the background, at 115200 baud with DTR set,
+while they pair, and close it when they are done. If the user's own terminal has the
+port open, opening it may fail (always on Windows, where only one program can
+open a port); then ask them to close their terminal. When a second program opens a port that is already open,
+the device doesn't print its banner again; send `D` instead.
 
 ### Home Assistant over MCP
 
@@ -202,6 +257,9 @@ clone, and never the user's own clone without asking.
 
 ## 8. File the issue well
 
+- For a crash, include the firmware version, the crash reason and PC, the
+  restart reason, and the events before the crash. The PC can only be
+  resolved with that exact build's `zephyr.elf`, so the version must be exact.
 - Match the structure of the triage issue template
   (`.github/ISSUE_TEMPLATE/via-triage.yml` in the repository): what happened,
   diagnosis, steps to reproduce, firmware version, board, controller and

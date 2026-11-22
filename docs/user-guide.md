@@ -88,14 +88,23 @@ Thread.
 The device keeps the pairing events since it started (about 70 events; the
 oldest are dropped first) and prints them all whenever a terminal opens the
 port, after the pairing code. Closing and reopening the terminal, or opening
-it only after a failed attempt, loses nothing.
+it only after a failed attempt, loses nothing. The events also survive a
+crash and a factory reset: a `---- Restarted ----` line separates them from
+the events after the restart, and a crash is reported with its cause. Only a
+power cycle (unplugging USB, removing the battery) erases them, so after a
+failed attempt, keep USB connected until you have looked at them.
+
+Event times count seconds since the device started. `S` shows the current
+uptime and why the device last restarted, so you can work out when an event
+happened and find it in your controller's logs.
 
 Press a key in the terminal to run a command:
 
 | Key | Command |
 |---|---|
-| `S` | Status: paired controllers (fabrics), pairing mode, last pairing attempt, Thread network, role and service registration with the border router |
+| `S` | Status: uptime, last restart reason, paired controllers (fabrics), pairing mode, last pairing attempt, Thread network, role and service registration with the border router |
 | `L` | Pairing events again |
+| `D` | Diagnostics report for support: firmware, status and all pairing events, without the pairing code |
 | `P` | Start pairing mode (Bluetooth advertising), like pressing a switch |
 | `X` | Stop pairing mode |
 | `I` | Show the pairing code and QR code again |
@@ -283,7 +292,11 @@ If more than one agent is installed, it asks which one to use; choose with
 Windows, reading the serial port needs `pip install pyserial`.
 
 The script writes a triage folder with a `context.md` describing this computer
-and the connected board, and the playbook the agent follows. The pairing code,
+and the connected board, and the playbook the agent follows. With current
+firmware, it also reads the device's diagnostics report (the `D` command), so
+after a failed pairing attempt the agent sees every step the controller took
+and where it stopped. Run it before unplugging the board: a power cycle
+erases those events. The pairing code,
 QR code and serial number are left out of `context.md`. With no agent
 installed, the script prints the files' paths so you can paste the playbook
 into any coding agent.
