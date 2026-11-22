@@ -26,7 +26,8 @@ src/default_zap/              Matter data model (.zap) and generated code
 boards/                       per-board pins and flash layout
 dev/                          development-only config overlays (see Testing on macOS)
 tools/                        provisioning with labels, BLE test client, SRP-to-mDNS bridge,
-                              Thread dataset provisioning
+                              Thread dataset provisioning, agent triage (triage.py and its
+                              playbook)
 sysbuild.cmake                builds battery_switch_app.uf2 (application only), firmware version
 .github/workflows/            builds the release UF2 files
 ```

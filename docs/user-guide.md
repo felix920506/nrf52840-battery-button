@@ -252,3 +252,43 @@ as well.
   conductors. The firmware only accepts a change that several samples in a row
   agree on; if that is not enough, build with a larger
   `CONFIG_APP_DEBOUNCE_LATCHING_MS` and `CONFIG_APP_DEBOUNCE_SAMPLES`.
+
+### Troubleshoot with a coding agent
+
+If the list above doesn't help, `tools/triage.py` starts a coding agent
+(Claude Code, Codex, or Antigravity, whichever is installed) that investigates
+the problem with you. It looks at the connected board, the docs and the
+firmware source for your version, searches existing issues, and can help you
+file a good one. It asks before it runs anything that changes your device and
+before it posts anything.
+
+You need Python 3 and one of the agent CLIs (`claude`, `codex`, or `agy`).
+Connect the board over USB if you can (without the battery), then run, from a
+clone of this repository:
+
+```sh
+python3 tools/triage.py
+```
+
+Or, without a clone:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/felix920506/nrf52840-battery-button/master/tools/triage.py
+python3 triage.py
+```
+
+If more than one agent is installed, it asks which one to use; choose with
+`--agent claude`, `--agent codex` or `--agent antigravity`, and a model with
+`--model <model-id>`. `--no-serial` skips opening the board's serial port. On
+Windows, reading the serial port needs `pip install pyserial`.
+
+The script writes a triage folder with a `context.md` describing this computer
+and the connected board, and the playbook the agent follows. The pairing code,
+QR code and serial number are left out of `context.md`. With no agent
+installed, the script prints the files' paths so you can paste the playbook
+into any coding agent.
+
+If your agent has a Home Assistant MCP server set up, the agent asks whether it
+may connect to your Home Assistant server. With your permission, it reads the
+device, its entities and related logs there instead of asking you to copy them.
+It only reads unless you approve a specific change.

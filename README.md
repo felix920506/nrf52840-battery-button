@@ -8,7 +8,9 @@ the battery appears as a Power Source.
 ## Documentation
 
 - [User guide](docs/user-guide.md): wiring, commissioning, switch settings,
-  firmware updates, factory reset, and troubleshooting.
+  firmware updates, factory reset, and troubleshooting, including
+  [`tools/triage.py`](docs/user-guide.md#troubleshoot-with-a-coding-agent),
+  which starts a coding agent to investigate a device that isn't working.
 - [Building and flashing](docs/building.md): SDK setup, local builds, flashing,
   provisioning, and releases.
 - [Development and testing](docs/development.md): code structure, transports,
