@@ -140,8 +140,8 @@ pairings, Thread network, and switch types:
    The board restarts with the new firmware; the LED flashes 3 times.
 5. Disconnect USB and reconnect the battery. Rejoining Thread may take a minute.
 
-Use the same release filename as the original install. Do not use
-`new-pairing-code.uf2` for an ordinary update; that image replaces the pairing
+Use the file for the same board as the original install. Do not use
+`new-pairing-code-<version>.uf2` for an ordinary update; that image replaces the pairing
 code.
 
 Your controller shows the installed firmware version on the device page (Home
@@ -164,12 +164,12 @@ existing pairings: controllers that already have the device keep it. To start
 over completely, remove the device from your controllers and factory-reset it
 as well.
 
-1. Download `new-pairing-code.uf2` from the
+1. Download `new-pairing-code-<version>.uf2` from the
    [latest release](https://github.com/felix920506/nrf52840-battery-button/releases/latest).
    It works for every UF2 board: it only erases the page that holds the
    pairing code, not the firmware or the settings.
 2. Disconnect the battery, connect the board over USB and double-press reset.
-3. Copy `new-pairing-code.uf2` onto the drive (on macOS with `cp -X` in
+3. Copy `new-pairing-code-<version>.uf2` onto the drive (on macOS with `cp -X` in
    Terminal, not with Finder).
 4. The board restarts and creates a new pairing code; the LED flashes 3
    times. If the USB drive is still there instead, copy the firmware file for

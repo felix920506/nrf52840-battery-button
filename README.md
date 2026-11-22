@@ -26,13 +26,13 @@ this is an uncertified Matter test device, and some ecosystems may reject it.
 
    | Board | Release file | Switch inputs |
    |---|---|---|
-   | Seeed XIAO nRF52840, Sense, Plus | `battery-switch-xiao-nrf52840.uf2` | D0–D5 |
-   | Adafruit Feather nRF52840 Express, Sense | `battery-switch-feather-nrf52840.uf2` | A0–A5 |
-   | Pro Micro nRF52840, nice!nano, SuperMini | `battery-switch-promicro-nrf52840.uf2` | See [user guide](docs/user-guide.md#hardware-and-wiring) |
+   | Seeed XIAO nRF52840, Sense, Plus | `battery-switch-xiao-nrf52840-<version>.uf2` | D0–D5 |
+   | Adafruit Feather nRF52840 Express, Sense | `battery-switch-feather-nrf52840-<version>.uf2` | A0–A5 |
+   | Pro Micro nRF52840, nice!nano, SuperMini | `battery-switch-promicro-nrf52840-<version>.uf2` | See [user guide](docs/user-guide.md#hardware-and-wiring) |
 
-   Only the XIAO image has been tested on hardware; the others are
-   build-tested. The Feather and Pro Micro bootloaders need SoftDevice S140 v6;
-   the XIAO needs v7. The bootloader drive's `INFO_UF2.TXT` shows the version.
+   `<version>` is the release tag, for example `v1.0.0`. Only the XIAO image
+   has been tested on hardware; the others are build-tested. The Feather and
+   Pro Micro bootloaders need SoftDevice S140 v6; the XIAO needs v7. The bootloader drive's `INFO_UF2.TXT` shows the version.
 
 2. Disconnect the battery. Connect the board over USB and double-press reset
    to enter its UF2 bootloader. A USB drive appears. Copy the downloaded UF2
@@ -43,7 +43,7 @@ this is an uncertified Matter test device, and some ecosystems may reject it.
 > loop. Use Terminal instead, replacing the filename and drive as needed:
 >
 > ```sh
-> cp -X battery-switch-xiao-nrf52840.uf2 /Volumes/XIAO-BOOT/
+> cp -X battery-switch-xiao-nrf52840-v1.0.0.uf2 /Volumes/XIAO-BOOT/
 > ```
 >
 > `ls /Volumes` shows the drive name. A final `Input/output error` is normal
