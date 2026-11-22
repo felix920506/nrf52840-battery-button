@@ -22,6 +22,8 @@ No build tools are needed. Release firmware creates a unique pairing code on
 first boot. You will need a supported nRF52840 board, a USB cable, a Matter
 controller, and a Thread border router. Only Home Assistant has been tested;
 this is an uncertified Matter test device, and some ecosystems may reject it.
+Home Assistant accepts it once the Matter Server add-on's test-net DCL option
+is turned on (see [Commissioning](docs/user-guide.md#commissioning)).
 
 1. Download the UF2 file for your board from the
    [latest release](https://github.com/felix920506/nrf52840-battery-button/releases/latest):

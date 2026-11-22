@@ -429,7 +429,8 @@ void ExplainFailure(CHIP_ERROR err)
 		diag_event("  -> The controller stopped after reading the device certificate. This is an");
 		diag_event("     uncertified test device (Matter test certificates, vendor 0xFFF1). Some");
 		diag_event("     ecosystems refuse it or need a developer/test setting; others ask you to");
-		diag_event("     confirm adding an uncertified device. Home Assistant accepts it.");
+		diag_event("     confirm adding an uncertified device. Home Assistant: turn on the Matter");
+		diag_event("     Server add-on's test-net DCL option and restart the add-on.");
 		break;
 	case Step::kCsr:
 		diag_event("  -> The controller stopped before installing its credentials on the device.");
