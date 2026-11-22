@@ -104,7 +104,11 @@ First establish which stage fails, because each points at different causes:
    USB connected, a running release firmware shows a serial port with USB ID
    `2fe3:0004`. If the board resets in a loop, or nothing shows at all, ask
    about wiring and power next.
-3. **Commissioning.** Is the pairing code shown over USB? Is the device still
+3. **Commissioning.** The pairing code is shown only on the USB serial
+   console; the device has no screen or label with it. Many users never open
+   a serial terminal, or can't while this session holds the port, so they
+   can't see the code at all: if they need it to pair, give it to them (see
+   "Giving the user the pairing code" below). Is the device still
    advertising (a brief LED blink every 2 s, for 15 minutes after boot or after
    a switch press while not commissioned)? Does the controller have a working
    Thread border router, and is the phone or controller close enough for BLE?
@@ -173,9 +177,37 @@ time, at 115200 baud:
 - `S`: the status alone. `L`: the history alone. `H`: the list of commands.
 
 Ask the user first for `P` (start pairing mode) and `X` (stop pairing mode).
-Never send `I` (prints the pairing code and QR code) or `F` (factory reset):
-if a factory reset is needed, explain what it erases and let the user do it.
-Send no other text to the port: every printable character is a key.
+Send `I` (prints the pairing code and QR code) only to give the user their
+pairing code, as described below. Never send `F` (factory reset): if a factory
+reset is needed, explain what it erases and let the user do it. Send no other
+text to the port: every printable character is a key.
+
+### Giving the user the pairing code
+
+The user needs the pairing code to pair, and it is only printed on the serial
+console. The context file has it redacted. If the user is about to pair or
+retry, and doesn't have the code in front of them (no serial terminal open,
+the port is held by this session, or the QR code drawing doesn't scan), offer
+to read it for them:
+
+1. Send `I` and read the reply. Look for the line `Pairing code:` followed by
+   the 11-digit manual pairing code (shown as `1234-567-8901`). If instead it
+   says to see the label that came with the device, the code isn't stored on
+   the device: ask the user to use that label.
+2. Tell the user the 11-digit code in the chat, in the same grouping, and how
+   to enter it: in the controller's add-device flow, choose the option to
+   enter a setup code manually instead of scanning a QR code (the wording
+   differs between apps and versions). Make sure the device is in pairing
+   mode first; ask before sending `P` to start it.
+3. Give only the 11-digit code. Don't repeat the `MT:` QR payload; the user
+   can't type it, and the manual code is enough.
+4. Keep the code out of everything else: don't write it to a file in the
+   triage folder, a commit, an issue, a comment or a command line, and don't
+   repeat it later in the session unless the user asks again.
+
+If pairing then fails with the code rejected, compare the code the user typed
+with the one you read (ask them to check digit by digit rather than having
+them paste it back), and check the history with `L` or `D`.
 
 To watch a new attempt, ask the user whether you may hold the port open while
 they pair again. Read the port in the background, at 115200 baud with DTR set,
@@ -295,7 +327,9 @@ The pairing code, the QR code payload (`MT:...`) and the device serial number
 are secrets: anyone in Bluetooth range who knows the code can commission an
 unpaired device. The context file has them removed. If you open the serial port
 yourself, or the user pastes its output, never repeat these values, and never
-put them in an issue or comment. Don't read `CURRENT.UF2` on a bootloader
+put them in an issue or comment. The one exception is telling the user their
+own 11-digit pairing code in the chat so they can pair (see "Giving the user
+the pairing code"). Don't read `CURRENT.UF2` on a bootloader
 drive: it is a dump of the whole flash, factory data included.
 
 Also scrub Thread network credentials (network key, PSKc, active dataset), Home

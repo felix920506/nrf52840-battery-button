@@ -297,7 +297,10 @@ firmware, it also reads the device's diagnostics report (the `D` command), so
 after a failed pairing attempt the agent sees every step the controller took
 and where it stopped. Run it before unplugging the board: a power cycle
 erases those events. The pairing code,
-QR code and serial number are left out of `context.md`. With no agent
+QR code and serial number are left out of `context.md`. If you need the
+pairing code to pair and don't have a serial terminal open, the agent can read
+it from the board and tell you the 11-digit code to enter manually in your
+controller's app; it doesn't write it anywhere else. With no agent
 installed, the script prints the files' paths so you can paste the playbook
 into any coding agent.
 
