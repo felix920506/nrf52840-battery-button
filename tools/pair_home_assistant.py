@@ -550,6 +550,16 @@ def device_link(ha, device):
 
 def explain_failure(error, events, bluetooth):
     print(f"Pairing failed: {error}\n")
+    if re.search(r"(?i)test-net DCL|test/development certificate", str(error)):
+        print("Home Assistant's Matter server refuses devices with Matter test certificates\n"
+              "unless they are allowed, and this uncertified device uses them. To allow them:\n"
+              "  - Settings > Add-ons > Matter Server > Configuration: turn on the test-net\n"
+              "    DCL option, save, and restart the add-on,\n"
+              "  - or start a stand-alone python-matter-server with --enable-test-net-dcl.\n"
+              "This lets Home Assistant add any device with test certificates; only do it if\n"
+              "you trust the devices you add. Then run this script again: the device keeps\n"
+              "the Thread network, so it pairs right away.")
+        return
     if any("Pairing FAILED" in l for l in events):
         print("The device's explanation is above (the lines after \"Pairing FAILED\").")
     elif any("checking the pairing code" in l for l in events):
