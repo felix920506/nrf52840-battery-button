@@ -246,6 +246,14 @@ void transport_start_pairing(void)
 {
 }
 
+int transport_join_network(const uint8_t *credentials, size_t len)
+{
+	ARG_UNUSED(credentials);
+	ARG_UNUSED(len);
+	/* No network to join. */
+	return -ENOTSUP;
+}
+
 void transport_stop_pairing(void)
 {
 }

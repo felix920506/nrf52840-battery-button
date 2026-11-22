@@ -30,6 +30,9 @@ void usb_info_flush(void);
 /* Handle a key typed in the terminal (on APP_EVT_USB_KEY). */
 void usb_info_key(void);
 
+/* Handle a line typed in the terminal (on APP_EVT_USB_LINE). */
+void usb_info_line(void);
+
 /*
  * Keep the diagnostic history for the next start: call right before a
  * restart the device chooses (crash, factory reset). A power cycle loses it.
