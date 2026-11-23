@@ -113,6 +113,12 @@ config APP_LATCH_POLL_SETTLE_US
 	help
 	  Increase for long cables between the board and the switch.
 
+	  A capacitor from the input pin to GND (against interference on
+	  the switch cable) must charge through the pull-up before the pin
+	  reads high, so an opened switch is otherwise never detected. Use
+	  300 for 10 nF with the internal pull-up (13 kOhm, up to 16 kOhm).
+	  Every us here keeps the CPU awake at every poll.
+
 endmenu
 
 menu "Battery"
