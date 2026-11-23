@@ -145,8 +145,7 @@ void switch_gesture_input(uint8_t index, bool active)
 		return;
 	}
 
-	switch (switch_input_get_type(index)) {
-	case SWITCH_TYPE_LATCHING_AS_PRESS:
+	if (switch_input_is_latching(index)) {
 		/*
 		 * The position means nothing, only the change does: report every
 		 * change as a complete short press. Changes within the multi press
@@ -154,16 +153,10 @@ void switch_gesture_input(uint8_t index, bool active)
 		 */
 		on_press(index, &gestures[index]);
 		on_release(index, &gestures[index]);
-		break;
-
-	case SWITCH_TYPE_MOMENTARY:
-	default:
-		if (active) {
-			on_press(index, &gestures[index]);
-		} else {
-			on_release(index, &gestures[index]);
-		}
-		break;
+	} else if (active) {
+		on_press(index, &gestures[index]);
+	} else {
+		on_release(index, &gestures[index]);
 	}
 }
 

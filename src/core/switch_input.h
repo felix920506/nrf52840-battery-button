@@ -1,8 +1,8 @@
 /*
  * SPDX-License-Identifier: MIT
  *
- * GPIO handling for the external switches: interrupt wake-up, debouncing
- * and low-power polling of closed latching switches.
+ * GPIO handling for the external switches: interrupt wake-up, debouncing,
+ * low-power polling of closed latching switches and NO/NC contact pairs.
  */
 
 #pragma once
@@ -30,11 +30,29 @@ enum switch_type {
 	SWITCH_TYPE_MOMENTARY = 0,
 	/* Latching (rocker, toggle, ...): every change is reported as a short press. */
 	SWITCH_TYPE_LATCHING_AS_PRESS = 2,
+	/*
+	 * The same with a changeover (NO/NC) contact on two pins, `gpios` and
+	 * `nc-gpios`, for resistance to interference. Only for switches with
+	 * nc-gpios in devicetree (switch_input_type_supported()).
+	 */
+	SWITCH_TYPE_MOMENTARY_NONC = 3,
+	SWITCH_TYPE_LATCHING_NONC = 4,
 };
 
 static inline bool switch_type_is_valid(uint32_t type)
 {
-	return type == SWITCH_TYPE_MOMENTARY || type == SWITCH_TYPE_LATCHING_AS_PRESS;
+	return type == SWITCH_TYPE_MOMENTARY || type == SWITCH_TYPE_LATCHING_AS_PRESS ||
+	       type == SWITCH_TYPE_MOMENTARY_NONC || type == SWITCH_TYPE_LATCHING_NONC;
+}
+
+static inline bool switch_type_is_latching(uint32_t type)
+{
+	return type == SWITCH_TYPE_LATCHING_AS_PRESS || type == SWITCH_TYPE_LATCHING_NONC;
+}
+
+static inline bool switch_type_is_nonc(uint32_t type)
+{
+	return type == SWITCH_TYPE_MOMENTARY_NONC || type == SWITCH_TYPE_LATCHING_NONC;
 }
 
 /* Called from the application loop with the debounced state of a switch. */
@@ -47,13 +65,19 @@ uint8_t switch_input_count(void);
 
 enum switch_type switch_input_get_type(uint8_t index);
 
+/* True if the switch has a second pin (nc-gpios), so the NO/NC types work. */
+bool switch_input_nc_available(uint8_t index);
+
+/* True if `type` is a valid switch type that switch `index` can use. */
+bool switch_input_type_supported(uint8_t index, uint32_t type);
+
 /*
  * Change the type of a switch at runtime. The pin is sampled again and its
  * state becomes the new debounced state, without reporting a change.
  */
 void switch_input_set_type(uint8_t index, enum switch_type type);
 
-/* True if the switch stays closed on its own (SWITCH_TYPE_LATCHING_AS_PRESS). */
+/* True if the switch stays closed on its own (a latching type). */
 bool switch_input_is_latching(uint8_t index);
 
 /* Debounced state: true while the switch is pressed/closed. */

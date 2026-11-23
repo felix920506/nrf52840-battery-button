@@ -18,6 +18,14 @@
  * Delete the nodes of switches that are not connected; their Matter
  * endpoints are then disabled.
  *
+ * NO/NC switches: switches 1-4 have a second pin (`nc-gpios`) for a
+ * changeover (SPDT) switch on a long cable. It is only used when the switch
+ * type is set to a NO/NC type, in the smart home app or with `switch-type`
+ * ("momentary-nonc", "latching-nonc"); otherwise it stays disconnected.
+ *
+ *   Switch 1 NC -> D6 (P1.11)   Switch 3 NC -> D8  (P1.13)
+ *   Switch 2 NC -> D7 (P1.12)   Switch 4 NC -> D10 (P1.15)
+ *
  * Factory reset: hold D9 (P1.14) to GND for 5 s (see zephyr,user below).
  *
  * Battery: connect + to 3V3 and - to GND (2x AAA or CR2032). The battery
@@ -37,21 +45,25 @@
 
 		switch_1 {
 			gpios = <&gpio0 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			nc-gpios = <&gpio1 11 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; /* D6 */
 			label = "Switch 1 (D0)";
 		};
 
 		switch_2 {
 			gpios = <&gpio0 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			nc-gpios = <&gpio1 12 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; /* D7 */
 			label = "Switch 2 (D1)";
 		};
 
 		switch_3 {
 			gpios = <&gpio0 28 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			nc-gpios = <&gpio1 13 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; /* D8 */
 			label = "Switch 3 (D2)";
 		};
 
 		switch_4 {
 			gpios = <&gpio0 29 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			nc-gpios = <&gpio1 15 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; /* D10 */
 			label = "Switch 4 (D3)";
 		};
 

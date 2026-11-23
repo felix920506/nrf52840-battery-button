@@ -38,6 +38,8 @@ struct transport_switch_config {
 	enum switch_type type[SWITCH_INPUT_MAX];
 	/* Position at boot, for SWITCH_TYPE_LATCHING. */
 	bool active[SWITCH_INPUT_MAX];
+	/* The switch has a second pin, so it can use the NO/NC types. */
+	bool nc[SWITCH_INPUT_MAX];
 };
 
 /* Start the stack. Returns once the device is ready to report events. */

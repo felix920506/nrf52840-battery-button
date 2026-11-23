@@ -68,6 +68,36 @@ firmware allows for). While a latching switch is closed, the firmware checks eve
 capacitor can't charge in that time, so **opening the switch would never be
 detected**. Momentary switches work with up to 100 nF.
 
+Where you can choose the switch, a [NO/NC switch](#nonc-switches) on three
+wires is more robust still, with or without a capacitor.
+
+### NO/NC switches
+
+For the most reliable switch on a long cable, use a switch with a changeover
+contact (NO/NC, SPDT, or a "3-way" wall switch) and three wires. Wire its
+common terminal to GND, the contact that closes when pressed (or in the "on"
+position) to the switch pin, and the other contact to the switch's NC pin:
+
+| Board | NC pins for switches 1–6 |
+|---|---|
+| Seeed XIAO nRF52840 | D6, D7, D8, D10 (switches 1–4 only) |
+| Adafruit Feather nRF52840 | D5, D6, D9, D10, D11, D12 |
+| Pro Micro nRF52840 | P0.31, P0.29, P0.02, P1.15, P1.13, P1.11 |
+
+Then set the switch's type to **Momentary NO/NC** or **Latching NO/NC** in
+the smart home app (see [Switch behavior](#switch-behavior)). The release
+firmware supports this as is. With the other types, the NC pin is not used.
+
+In each position, one of the two pins is tied to GND by the switch, which
+interference can hardly lift, so the device only accepts a change when both
+pins change. Interference that pulls the open pin low is ignored. Neither
+position draws current through the pull-ups. The switch must open one
+contact before closing the other; most rockers, microswitches and 3-way
+switches do. If both contacts read closed, or both open (for example a NO/NC
+type on a switch with only two wires), the USB serial port says so, so you
+can check the wiring. A NO/NC type on a two-wire switch doesn't work: it
+would never see the switch being released or turned off.
+
 ## Commissioning
 
 The device advertises over Bluetooth LE for 15 minutes after first boot, and
@@ -258,12 +288,15 @@ Otherwise it stays off to save power.
 ## Switch behavior
 
 Each of up to six inputs appears as a separate Matter Generic Switch endpoint.
-The type can be set to:
+The type can be set to (the NO/NC types only on switches with an NC pin, see
+[NO/NC switches](#nonc-switches)):
 
 | Type | Suitable for | Reported behavior |
 |---|---|---|
 | Momentary (default) | Push buttons | Press, release, long press, and multi-press events |
 | Latching | Rockers and toggles | A short press for every change of position |
+| Momentary NO/NC | Push buttons with a changeover contact, 3 wires | As Momentary |
+| Latching NO/NC | Rockers and toggles with a changeover contact, 3 wires | As Latching |
 
 A latching switch reports changes as presses, not its physical position. A
 controller can use it as a toggle. Rapid flips can count as a double press;
@@ -287,7 +320,8 @@ device, or with the command-line Matter controller:
 chip-tool modeselect change-to-mode <mode> <node-id> <endpoint>
 ```
 
-Use mode `0` for Momentary and `2` for Latching. The device applies the new
+Use mode `0` for Momentary, `2` for Latching, `3` for Momentary NO/NC and `4`
+for Latching NO/NC. The device applies the new
 type immediately. It is stored in flash and survives reboots, updates, and
 factory resets: it describes the wiring, which doesn't change when you
 re-pair.
@@ -387,7 +421,8 @@ as well.
   interference, typically from mains wiring next to it. Keep the cable short,
   twist each switch wire with its GND wire, and route it away from mains
   conductors. If that is not enough, add a 10 nF capacitor from the input pin
-  to GND (see [Long switch cables](#long-switch-cables)). The firmware
+  to GND (see [Long switch cables](#long-switch-cables)), or use a
+  [NO/NC switch](#nonc-switches) on three wires. The firmware
   only accepts a change that several samples in a row agree on; you can also
   build with a larger `CONFIG_APP_DEBOUNCE_LATCHING_MS` and
   `CONFIG_APP_DEBOUNCE_SAMPLES`.

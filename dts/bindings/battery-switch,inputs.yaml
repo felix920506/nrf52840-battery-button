@@ -6,6 +6,10 @@ description: |
   supported. Wire each switch between the GPIO pin and GND and use
   (GPIO_PULL_UP | GPIO_ACTIVE_LOW) as flags.
 
+  A switch can also have a second pin, `nc-gpios`, for a changeover (NO/NC,
+  SPDT) contact, which resists interference on long cables much better. The
+  NO/NC switch types use it; with the other types it stays disconnected.
+
 compatible: "battery-switch,inputs"
 
 child-binding:
@@ -14,6 +18,23 @@ child-binding:
     gpios:
       type: phandle-array
       required: true
+    nc-gpios:
+      type: phandle-array
+      description: |
+        Optional second pin, for the NO/NC switch types: the other contact
+        of a changeover (NO/NC, SPDT) switch, closed to GND while `gpios`
+        is open, i.e. while a momentary switch is released, or in the other
+        position of a latching switch. Use the same flags as `gpios`. The
+        switch must break one contact before making the other (common for
+        rockers, microswitches and "3-way" wall switches). Unused, and
+        disconnected, while the switch has a type without NO/NC.
+
+        With a NO/NC type, a change is only accepted when both pins change,
+        in opposite directions. Interference on a long cable can pull an open pin low,
+        but can hardly lift the pin that the switch ties to GND, so
+        nuisance triggers become very unlikely. Neither position draws
+        pull-up current, and latching switches need no polling while
+        closed.
     label:
       type: string
       description: Human readable name, only used for logging.
@@ -23,6 +44,8 @@ child-binding:
       enum:
         - "momentary"
         - "latching"
+        - "momentary-nonc"
+        - "latching-nonc"
       description: |
         Default type of the switch; it can be changed later from the smart
         home app (Matter Mode Select "Switch type").
@@ -39,3 +62,7 @@ child-binding:
           reported as a short press, so controllers can use it like a push
           button. Changing it several times quickly counts as a multi press.
           Long press is not possible.
+
+        momentary-nonc, latching-nonc:
+          The same, for a changeover switch wired to both `gpios` and
+          `nc-gpios` (required).
