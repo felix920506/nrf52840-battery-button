@@ -48,6 +48,9 @@ Controllers receive these **Switch cluster events**:
 | momentary | MS, MSR, MSL, MSM (`0x1E`) | `InitialPress`, `ShortRelease`, `LongPress`, `LongRelease`, `MultiPressOngoing`, `MultiPressComplete` |
 | latching | MS, MSR, MSM (`0x16`) | per change of position: `InitialPress`, `ShortRelease`; then `MultiPressComplete(n)` |
 
+The NO/NC types report exactly like momentary and latching; they only change
+how the pins are read.
+
 Momentary sequences follow the Matter spec and the TC-SWTCH-2.4/2.5
 certification tests:
 
@@ -64,13 +67,16 @@ certification tests:
 `BatReplacementNeeded`.
 
 The Mode Select cluster on each switch endpoint has modes 0 (momentary) and 2
-(latching). Mode 1 was an earlier type that reported the rocker's position
+(latching), and on switches with `nc-gpios` also 3 (momentary NO/NC) and 4
+(latching NO/NC); the other switches don't list or accept those. A stored
+NO/NC type on a switch without `nc-gpios` (e.g. after an overlay change) is
+ignored at boot. Mode 1 was an earlier type that reported the rocker's position
 (Matter `SwitchLatched`); it no longer exists, and a switch stored with it
 switches to mode 2 on the next boot. Controllers such as Home Assistant can't
 follow a switch that changes to a position-reporting type, and a position is
 rarely what automations need. Changing the type takes effect immediately: it
 changes the electrical handling (the power-saving polling of closed latching
-switches), the Switch cluster feature map and the events. Controllers may keep
+switches, reading both contacts of a NO/NC switch), the Switch cluster feature map and the events. Controllers may keep
 using the old behaviour until they re-read the device; this Matter SDK can't
 flag the change through `ConfigurationVersion` yet.
 
@@ -323,6 +329,13 @@ Cleaning up:
   switches together sharing one wait. The trade-off is up to 100 ms of
   latency when the switch is opened.
   Momentary buttons draw pull-up current only while held.
+- A switch with a **NO/NC type** disconnects whichever pin its switch holds
+  closed and waits for a level interrupt on the other one, so it never draws
+  pull-up current and is never polled. Each debounce sample connects both pins
+  for `CONFIG_APP_LATCH_POLL_SETTLE_US`. Only if both contacts read closed
+  (a wiring fault, or interference) does it fall back to the latching poll
+  timer, because a level interrupt on a closed pin would fire continuously.
+  With the other types, the `nc-gpios` pin is disconnected.
 - The battery is measured once per hour on the internal VDD channel, with no
   divider.
 - The on-board 2 MB QSPI flash is put into deep power-down. UART, I²C, SPI,

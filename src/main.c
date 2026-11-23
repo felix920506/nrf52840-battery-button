@@ -83,8 +83,7 @@ static void on_input(uint8_t index, bool active)
 /* Change requested through the transport (e.g. the smart home app). */
 static void change_switch_type(uint8_t index, uint16_t type)
 {
-	if (index >= switch_input_count() || !switch_type_is_valid(type) ||
-	    switch_input_get_type(index) == type) {
+	if (!switch_input_type_supported(index, type) || switch_input_get_type(index) == type) {
 		return;
 	}
 
@@ -178,6 +177,7 @@ int main(void)
 	for (uint8_t i = 0; i < switches.count; i++) {
 		switches.type[i] = switch_input_get_type(i);
 		switches.active[i] = switch_input_is_active(i);
+		switches.nc[i] = switch_input_nc_available(i);
 	}
 
 	switch_gesture_init(switches.count, on_switch_event);

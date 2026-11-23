@@ -34,7 +34,7 @@ EVENTS = {
     5: "MultiPressOngoing",
     6: "MultiPressComplete",
 }
-TYPES = {0: "momentary", 2: "latching"}
+TYPES = {0: "momentary", 2: "latching", 3: "momentary-nonc", 4: "latching-nonc"}
 TYPE_IDS = {name: value for value, name in TYPES.items()}
 
 
@@ -98,7 +98,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument("--set-type", nargs=2, metavar=("SWITCH", "TYPE"),
                         help="change a switch's type first, e.g. --set-type 2 latching "
-                             "(momentary, latching)")
+                             "(momentary, latching, momentary-nonc, latching-nonc)")
     args = parser.parse_args()
     set_type = None
     if args.set_type:

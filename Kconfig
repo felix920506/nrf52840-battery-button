@@ -114,6 +114,8 @@ config APP_LATCH_POLL_SETTLE_US
 	  How long the pull-up of a closed latching switch is turned on
 	  before it is sampled. The CPU sleeps meanwhile; the pull-up
 	  current through the closed switch (~230 uA) is what this costs.
+	  Also used for every debounce sample of a switch with a NO/NC type,
+	  whose pins are only connected while being read.
 
 	  The default lets a capacitor of up to 10 nF from the input pin to
 	  GND (against interference on the switch cable, see the user

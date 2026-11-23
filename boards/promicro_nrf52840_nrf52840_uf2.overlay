@@ -10,6 +10,15 @@
  *   Switch 2 -> 020 (P0.20, "D3")    Switch 5 -> 100 (P1.00, "D6")
  *   Switch 3 -> 022 (P0.22, "D4")    Switch 6 -> 011 (P0.11, "D7")
  *
+ * NO/NC switches: each switch has a second pin (`nc-gpios`) for a changeover
+ * (SPDT) switch on a long cable, on the other row of pins. It is only used
+ * when the switch type is set to a NO/NC type in the smart home app;
+ * otherwise it stays disconnected.
+ *
+ *   Switch 1 NC -> 031 (P0.31)       Switch 4 NC -> 115 (P1.15)
+ *   Switch 2 NC -> 029 (P0.29)       Switch 5 NC -> 113 (P1.13)
+ *   Switch 3 NC -> 002 (P0.02)       Switch 6 NC -> 111 (P1.11)
+ *
  * Factory reset: hold 106 (P1.06, "D9") to GND for 5 s.
  *
  * Battery: connect + to VCC (3.3 V pin) and - to GND (2x AAA or CR2032), not
@@ -26,31 +35,37 @@
 
 		switch_1 {
 			gpios = <&gpio0 17 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			nc-gpios = <&gpio0 31 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; /* 031 */
 			label = "Switch 1 (P0.17)";
 		};
 
 		switch_2 {
 			gpios = <&gpio0 20 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			nc-gpios = <&gpio0 29 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; /* 029 */
 			label = "Switch 2 (P0.20)";
 		};
 
 		switch_3 {
 			gpios = <&gpio0 22 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			nc-gpios = <&gpio0 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; /* 002 */
 			label = "Switch 3 (P0.22)";
 		};
 
 		switch_4 {
 			gpios = <&gpio0 24 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			nc-gpios = <&gpio1 15 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; /* 115 */
 			label = "Switch 4 (P0.24)";
 		};
 
 		switch_5 {
 			gpios = <&gpio1 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			nc-gpios = <&gpio1 13 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; /* 113 */
 			label = "Switch 5 (P1.00)";
 		};
 
 		switch_6 {
 			gpios = <&gpio0 11 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			nc-gpios = <&gpio1 11 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; /* 111 */
 			label = "Switch 6 (P0.11)";
 		};
 	};

@@ -14,10 +14,12 @@
  *                             [2] position (new or previous, see switch_gesture.h)
  *                             [3] press count (multi press events)
  *     Switch Info             ...0003  (read): [0] number of switches,
- *                             [1..n] switch type (0 momentary, 2 latching)
+ *                             [1..n] switch type (0 momentary, 2 latching,
+ *                                    3 momentary NO/NC, 4 latching NO/NC)
  *     Battery Voltage         ...0004  (read, notify): uint16 little endian, mV
  *     Switch Type             ...0005  (write): [0] switch number 1..6,
- *                             [1] new type (0 momentary, 2 latching).
+ *                             [1] new type (as in Switch Info; NO/NC only
+ *                                 for switches with a second pin).
  *                             Stored on the device;
  *                             Switch Info shows the result.
  *
@@ -87,7 +89,8 @@ static ssize_t write_switch_type(struct bt_conn *conn, const struct bt_gatt_attr
 	if (offset != 0 || len != 2) {
 		return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
 	}
-	if (req[0] < 1 || req[0] > switch_info[0] || !switch_type_is_valid(req[1])) {
+	if (req[0] < 1 || req[0] > switch_info[0] ||
+	    !switch_input_type_supported(req[0] - 1, req[1])) {
 		return BT_GATT_ERR(BT_ATT_ERR_VALUE_NOT_ALLOWED);
 	}
 

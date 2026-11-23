@@ -9,12 +9,15 @@
  *
  * Each switch endpoint also has a Mode Select cluster to change the switch
  * type from the smart home app (e.g. Home Assistant shows it as a dropdown):
- *   mode 0 momentary, mode 2 latching (enum switch_type; 1 was removed).
+ *   mode 0 momentary, mode 2 latching (enum switch_type; 1 was removed), and
+ *   on switches with a second pin also mode 3 momentary NO/NC and mode 4
+ *   latching NO/NC.
  *
  * Endpoints without a switch in devicetree are disabled at runtime. The
  * Switch cluster feature map is set per endpoint at runtime:
  *   momentary: MS | MSR | MSL | MSM  (press/release/long press/multi press)
  *   latching:  MS | MSR | MSM        (every change of position is a short press)
+ * The NO/NC types report the same as their plain counterparts.
  *
  * The device is a Thread sleepy end device and a Matter ICD; switch events
  * are sent to subscribed controllers as soon as they happen.
@@ -166,11 +169,17 @@ SWITCH_IDENTIFY(6);
 
 using ModeOption = Clusters::ModeSelect::Structs::ModeOptionStruct::Type;
 
-/* The mode value is the enum switch_type value (0 and 2; 1 was removed). */
+/*
+ * The mode value is the enum switch_type value (1 was removed). The NO/NC
+ * modes come last and are only offered by switches with a second pin.
+ */
 const ModeOption kSwitchModes[] = {
 	{ CharSpan::fromCharString("Momentary (push button)"), SWITCH_TYPE_MOMENTARY, {} },
 	{ CharSpan::fromCharString("Latching (rocker, toggle)"), SWITCH_TYPE_LATCHING_AS_PRESS, {} },
+	{ CharSpan::fromCharString("Momentary NO/NC (3 wires)"), SWITCH_TYPE_MOMENTARY_NONC, {} },
+	{ CharSpan::fromCharString("Latching NO/NC (3 wires)"), SWITCH_TYPE_LATCHING_NONC, {} },
 };
+constexpr size_t kPlainSwitchModes = 2;
 
 class SwitchModesManager : public Clusters::ModeSelect::SupportedModesManager {
 public:
@@ -179,21 +188,28 @@ public:
 		if (!IsSwitchEndpoint(endpoint)) {
 			return ModeOptionsProvider();
 		}
-		return ModeOptionsProvider(std::begin(kSwitchModes), std::end(kSwitchModes));
+		return ModeOptionsProvider(std::begin(kSwitchModes), std::begin(kSwitchModes) + ModeCount(endpoint));
 	}
 
 	Protocols::InteractionModel::Status getModeOptionByMode(EndpointId endpoint, uint8_t mode,
 								const ModeOption **dataPtr) const override
 	{
 		if (IsSwitchEndpoint(endpoint)) {
-			for (const ModeOption &option : kSwitchModes) {
-				if (option.mode == mode) {
-					*dataPtr = &option;
+			for (size_t i = 0; i < ModeCount(endpoint); i++) {
+				if (kSwitchModes[i].mode == mode) {
+					*dataPtr = &kSwitchModes[i];
 					return Protocols::InteractionModel::Status::Success;
 				}
 			}
 		}
 		return Protocols::InteractionModel::Status::InvalidCommand;
+	}
+
+	/* Call only for a switch endpoint. */
+	static size_t ModeCount(EndpointId endpoint)
+	{
+		return sSwitches.nc[endpoint - kFirstSwitchEndpoint] ? std::size(kSwitchModes)
+								     : kPlainSwitchModes;
 	}
 
 	static bool IsSwitchEndpoint(EndpointId endpoint)
@@ -219,7 +235,7 @@ void ApplySwitchType(uint8_t index, enum switch_type type, bool active)
 			    static_cast<uint32_t>(Feature::kMomentarySwitchRelease) |
 			    static_cast<uint32_t>(Feature::kMomentarySwitchMultiPress);
 
-	if (type == SWITCH_TYPE_MOMENTARY) {
+	if (!switch_type_is_latching(type)) {
 		features |= static_cast<uint32_t>(Feature::kMomentarySwitchLongPress);
 	}
 

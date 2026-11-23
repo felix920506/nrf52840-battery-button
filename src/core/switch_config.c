@@ -37,7 +37,8 @@ static int load_cb(const char *key, size_t len, settings_read_cb read_cb, void *
 		migrate_mask |= BIT(index);
 	}
 
-	if (switch_type_is_valid(type)) {
+	/* A NO/NC type stays unused if the board no longer has the second pin. */
+	if (switch_input_type_supported((uint8_t)index, type)) {
 		switch_input_set_type((uint8_t)index, (enum switch_type)type);
 	}
 	return 0;
