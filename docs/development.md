@@ -315,9 +315,13 @@ Cleaning up:
 - Switch pins wake the CPU through the GPIO SENSE mechanism (level
   interrupts), not GPIOTE IN channels. SENSE draws no current while idle.
 - A **closed latching switch** would draw about 230 µA through the pull-up
-  indefinitely. Instead, the pin is disconnected and sampled for about 10 µs
-  every 100 ms (`CONFIG_APP_LATCH_POLL_INTERVAL_MS`), which costs roughly
-  1 µA. The trade-off is up to 100 ms of latency when the switch is opened.
+  indefinitely. Instead, the pin is disconnected and sampled every 100 ms
+  (`CONFIG_APP_LATCH_POLL_INTERVAL_MS`). The pull-up is turned on 400 µs
+  before each sample (`CONFIG_APP_LATCH_POLL_SETTLE_US`) so that a capacitor
+  of up to 10 nF against interference can charge; the CPU sleeps meanwhile.
+  This costs roughly 1–2 µA (about 0.9 µA of it pull-up current), all
+  switches together sharing one wait. The trade-off is up to 100 ms of
+  latency when the switch is opened.
   Momentary buttons draw pull-up current only while held.
 - The battery is measured once per hour on the internal VDD channel, with no
   divider.

@@ -46,6 +46,28 @@ so no switch can trigger a reset by accident.
 The XIAO nRF52840, Sense and Plus share the chip, flash and D0–D10 pinout, so
 the same release file works on all three.
 
+### Long switch cables
+
+An open switch holds its pin high only through the internal pull-up
+(about 13 kΩ). A long cable laid next to mains wiring picks up fast spikes
+when nearby loads switch (relays, motors, dimmers, light switches), and they
+can pull the pin low for long enough to look like a press. Keep the cable
+short, twist each switch wire with its GND wire, and route it away from mains
+conductors.
+
+If a switch still triggers on its own, add a 10 nF ceramic capacitor (any
+generic MLCC) from each affected input pin to GND, soldered at the board, not
+at the switch. The capacitor and the cable's small coupling capacitance (tens
+of pF) form a divider, so the spikes reach the pin about a hundred times
+weaker. It draws no current, and the release firmware works with it as is.
+
+Don't use more than 10 nF on a switch that is, or may later be set to,
+latching (generic MLCCs can be up to 80% above their marking, which the
+firmware allows for). While a latching switch is closed, the firmware checks every
+100 ms whether it has opened by turning the pull-up on for 400 µs; a larger
+capacitor can't charge in that time, so **opening the switch would never be
+detected**. Momentary switches work with up to 100 nF.
+
 ## Commissioning
 
 The device advertises over Bluetooth LE for 15 minutes after first boot, and
@@ -364,9 +386,11 @@ as well.
 - **A switch triggers on its own:** the switch cable is picking up
   interference, typically from mains wiring next to it. Keep the cable short,
   twist each switch wire with its GND wire, and route it away from mains
-  conductors. The firmware only accepts a change that several samples in a row
-  agree on; if that is not enough, build with a larger
-  `CONFIG_APP_DEBOUNCE_LATCHING_MS` and `CONFIG_APP_DEBOUNCE_SAMPLES`.
+  conductors. If that is not enough, add a 10 nF capacitor from the input pin
+  to GND (see [Long switch cables](#long-switch-cables)). The firmware
+  only accepts a change that several samples in a row agree on; you can also
+  build with a larger `CONFIG_APP_DEBOUNCE_LATCHING_MS` and
+  `CONFIG_APP_DEBOUNCE_SAMPLES`.
 
 ### Troubleshoot with a coding agent
 
