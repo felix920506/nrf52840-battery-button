@@ -72,6 +72,40 @@ turn it off again once the device is paired: it only matters while a device
 is added. [`tools/pair_home_assistant.py`](#pair-with-home-assistant-from-a-computer)
 does both for you.
 
+There are two ways to pair: with your controller's phone app over Bluetooth
+([below](#pair-with-a-phone)), which works with any Matter controller, or,
+for Home Assistant, from a computer with the board connected over USB
+([Pair with Home Assistant from a computer](#pair-with-home-assistant-from-a-computer)).
+
+### Pair with a phone
+
+1. Connect the board over USB, without the battery, and open its serial port
+   at 115200 baud (see the README Quick start for commands). Keep the port
+   open: it shows the QR code and pairing code, and each pairing step as it
+   happens.
+2. Check that the device is in pairing mode: the blue LED blinks briefly
+   every 2 s. If it doesn't, press any switch, or press `P` in the terminal.
+   Pairing mode lasts 15 minutes.
+3. On your phone, turn on Bluetooth and stay within a few metres of the
+   device. The phone must be on the same network as your controller.
+4. In your controller's app, add a Matter device and scan the QR code from
+   the serial port, or choose to enter the code manually and type the
+   11-digit pairing code. In the Home Assistant Companion app, go to
+   *Settings → Devices & services → Devices*, select *Add device*, then
+   *Add Matter device*. Make sure the test-net DCL option is on first (see
+   above).
+5. The app may warn that the device is uncertified; choose to add it anyway.
+   It then gives the device your Thread network over Bluetooth, and the
+   device joins it. The phone needs your Thread network's credentials for
+   this: in the Home Assistant Companion app on Android, use *Sync Thread
+   credentials* (*Settings → Companion app → Troubleshooting*) if pairing
+   stops at the Thread step.
+6. When the app shows the device, pairing is done and the LED stops
+   blinking. You can now disconnect USB and connect the battery.
+
+If pairing fails, the serial port shows the step where it stopped and what to
+check (see [Pairing diagnostics](#pairing-diagnostics-on-the-serial-port)).
+
 ### Pair with Home Assistant from a computer
 
 Instead of scanning the QR code with a phone, `tools/pair_home_assistant.py`
