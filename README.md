@@ -63,9 +63,10 @@ is turned on (see [Commissioning](docs/user-guide.md#commissioning)).
    failed and what to check, also when you open it afterwards. Press `H` for
    commands such as status and factory reset.
 
-4. In your Matter controller, scan the QR code or enter the pairing code. The
-   controller setup needs access to a Thread border router. Pairing can be done
-   while the board is powered over USB.
+4. In your Matter controller's app, scan the QR code or enter the pairing code
+   (step by step: [Pair with a phone](docs/user-guide.md#pair-with-a-phone)).
+   The controller setup needs access to a Thread border router. Pairing can be
+   done while the board is powered over USB.
    With Home Assistant, [`tools/pair_home_assistant.py`](docs/user-guide.md#pair-with-home-assistant-from-a-computer)
    can instead pair the connected board from your computer, over the Thread
    network without Bluetooth, with an access token.
