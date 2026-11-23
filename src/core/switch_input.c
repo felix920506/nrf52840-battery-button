@@ -10,7 +10,10 @@
  *    it) until released. Presses are short, so this is fine.
  *  - A closed latching switch would draw current through the pull-up for as
  *    long as it stays closed. Instead, its pin is disconnected and sampled
- *    every CONFIG_APP_LATCH_POLL_INTERVAL_MS for a few microseconds.
+ *    every CONFIG_APP_LATCH_POLL_INTERVAL_MS. The pull-up is turned on
+ *    CONFIG_APP_LATCH_POLL_SETTLE_US before the sample, long enough to charge
+ *    a capacitor against interference (see the user guide); the CPU sleeps
+ *    meanwhile.
  */
 
 #include "switch_input.h"
@@ -115,6 +118,16 @@ static int disconnect_pin(uint8_t idx)
 static bool read_pin(uint8_t idx)
 {
 	return gpio_pin_get_dt(&specs[idx]) > 0;
+}
+
+/*
+ * Wait for just-connected pull-ups to charge their pins, including a
+ * capacitor of up to 10 nF from a pin to GND. Sleeping, not busy waiting:
+ * this runs every poll interval while a latching switch is closed.
+ */
+static void settle(void)
+{
+	k_usleep(CONFIG_APP_LATCH_POLL_SETTLE_US);
 }
 
 /* Give up on a pin that never settles, so noise can't keep the CPU awake. */
@@ -222,15 +235,20 @@ static void process_poll(void)
 {
 	bool any_polling = false;
 
+	/* One settle time for all closed switches. */
+	for (uint8_t i = 0; i < NUM_INPUTS; i++) {
+		if (inputs[i].polling) {
+			connect_pin(i);
+		}
+	}
+	settle();
+
 	for (uint8_t i = 0; i < NUM_INPUTS; i++) {
 		struct input_state *in = &inputs[i];
 
 		if (!in->polling) {
 			continue;
 		}
-
-		connect_pin(i);
-		k_busy_wait(CONFIG_APP_LATCH_POLL_SETTLE_US);
 
 		if (read_pin(i)) {
 			/* Still closed. */
@@ -288,7 +306,7 @@ int switch_input_init(switch_input_handler_t handler)
 			return err;
 		}
 
-		k_busy_wait(CONFIG_APP_LATCH_POLL_SETTLE_US);
+		settle();
 		inputs[i].active = read_pin(i);
 		k_timer_init(&inputs[i].debounce_timer, debounce_expiry, NULL);
 
@@ -328,7 +346,7 @@ void switch_input_set_type(uint8_t index, enum switch_type type)
 	in->debouncing = false;
 	gpio_pin_interrupt_configure_dt(&specs[index], GPIO_INT_DISABLE);
 	connect_pin(index);
-	k_busy_wait(CONFIG_APP_LATCH_POLL_SETTLE_US);
+	settle();
 	in->active = read_pin(index);
 	arm(index);
 

@@ -55,28 +55,18 @@ can pull the pin low for long enough to look like a press. Keep the cable
 short, twist each switch wire with its GND wire, and route it away from mains
 conductors.
 
-If a switch still triggers on its own, add a ceramic capacitor (X7R or C0G)
-from each affected input pin to GND, soldered at the board, not at the
-switch. The capacitor and the cable's small coupling capacitance (tens of pF)
-form a divider, so the spikes reach the pin about a hundred times weaker. It
-draws no current.
+If a switch still triggers on its own, add a 10 nF ceramic capacitor (any
+generic MLCC) from each affected input pin to GND, soldered at the board, not
+at the switch. The capacitor and the cable's small coupling capacitance (tens
+of pF) form a divider, so the spikes reach the pin about a hundred times
+weaker. It draws no current, and the release firmware works with it as is.
 
-| Switch type | Capacitor | Firmware change |
-|---|---|---|
-| Momentary | 10–100 nF | none |
-| Latching | 10 nF, not more | build with `CONFIG_APP_LATCH_POLL_SETTLE_US=300` |
-
-> [!WARNING]
-> **A capacitor on a latching switch needs the longer settle time.** While a
-> latching switch is closed, the firmware turns the pull-up on for only 10 µs
-> every 100 ms to see whether it has opened. With a capacitor, the pin needs
-> far longer to rise, so the default settle time always reads "closed" and
-> **opening the switch is never detected**. With 10 nF and the internal
-> pull-up, the pin needs up to about 200 µs; 300 µs leaves a margin. The
-> longer wait keeps the processor awake for longer at every check, which adds
-> roughly 10 µA while a latching switch is closed. Larger capacitors would
-> need more than the 1000 µs maximum. This also applies when a switch's type
-> is changed to latching from the smart home app.
+Don't use more than 10 nF on a switch that is, or may later be set to,
+latching (generic MLCCs can be up to 80% above their marking, which the
+firmware allows for). While a latching switch is closed, the firmware checks every
+100 ms whether it has opened by turning the pull-up on for 400 µs; a larger
+capacitor can't charge in that time, so **opening the switch would never be
+detected**. Momentary switches work with up to 100 nF.
 
 ## Commissioning
 
@@ -396,9 +386,8 @@ as well.
 - **A switch triggers on its own:** the switch cable is picking up
   interference, typically from mains wiring next to it. Keep the cable short,
   twist each switch wire with its GND wire, and route it away from mains
-  conductors. If that is not enough, add a capacitor from the input pin to GND
-  (see [Long switch cables](#long-switch-cables); a latching switch then
-  needs a longer settle time, or opening it is never detected). The firmware
+  conductors. If that is not enough, add a 10 nF capacitor from the input pin
+  to GND (see [Long switch cables](#long-switch-cables)). The firmware
   only accepts a change that several samples in a row agree on; you can also
   build with a larger `CONFIG_APP_DEBOUNCE_LATCHING_MS` and
   `CONFIG_APP_DEBOUNCE_SAMPLES`.
